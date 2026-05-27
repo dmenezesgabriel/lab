@@ -20,6 +20,10 @@ ingester:
   max_block_bytes: 500000
   max_block_duration: 5m
 
+compactor:
+  compaction:
+    block_retention: 24h
+
 storage:
   trace:
     backend: local
