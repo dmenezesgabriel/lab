@@ -227,3 +227,5 @@ catboost_info/
 .build/
 
 .claude/worktrees
+
+*.gguf

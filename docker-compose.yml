@@ -15,9 +15,9 @@ x-airflow-env: &airflow-env
   AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: 1
   AIRFLOW__CORE__LAZY_LOAD_PROVIDERS: "True"
   AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-webserver:8080/execution/
-  AIRFLOW__API_AUTH__JWT_SECRET: "OpN6nUDy6b+Wa4QF6TPQsMcVxltHBV8PC8FvofpWLMM="
+  AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW__API_AUTH__JWT_SECRET}
   AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-db:5432/airflow
-  AIRFLOW__API_SERVER__SECRET_KEY: "your-super-secret-key-change-me"
+  AIRFLOW__API_SERVER__SECRET_KEY: ${AIRFLOW__API_SERVER__SECRET_KEY}
   AIRFLOW__API_AUTH__BACKEND: airflow.api_auth.backend.basic_auth
   AIRFLOW__LOG_RETENTION_DAYS: "7"
   AIRFLOW__STANDARD__VENV_INSTALL_METHOD: uv
@@ -116,7 +116,7 @@ x-resources-xlarge: &resources-xlarge
 x-resources-xxlarge: &resources-xxlarge
   <<: *default-logging
   mem_limit: 1536m
-  memswap_limit: 1536m
+  memswap_limit: 2304m
   cpus: 2
   deploy:
     resources:
@@ -224,6 +224,8 @@ services:
     profiles:
       - model-registry
       - airflow
+      - quality
+      - lineage
     <<: *resources-large # shared metadata DB for MLflow, Airflow, Marquez, and SonarQube
     image: postgres:18-alpine3.22
     container_name: postgres-db
@@ -520,7 +522,7 @@ services:
     env_file:
       - .env
     tmpfs:
-      - /tmp:size=512m
+      - /tmp:size=128m
     healthcheck:
       test:
         ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health"]
@@ -644,6 +646,7 @@ services:
       - "9090:9090"
     volumes:
       - ./services/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yml
+      - ./services/prometheus/rules:/etc/prometheus/rules:ro
       - prometheus_data:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -738,6 +741,15 @@ services:
     profiles:
       - observability-extras
     <<: *resources-small
+    cpus: 0.50
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+          cpus: "0.50"
+        reservations:
+          memory: 64M
+          cpus: "0.05"
     image: gcr.io/cadvisor/cadvisor:v0.55.1
     container_name: cadvisor
     privileged: true

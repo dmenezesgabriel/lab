@@ -5,8 +5,16 @@ groups:
       # Alert when a container uses more than 85% of its CPU limit
       - alert: ContainerHighCPU
         expr: |
-          sum by (name) (
-            rate(container_cpu_usage_seconds_total{image!=""}[2m])
+          (
+            sum by (name) (
+              rate(container_cpu_usage_seconds_total{image!=""}[2m])
+            )
+            /
+            sum by (name) (
+              (container_spec_cpu_quota{image!=""} > 0)
+              /
+              container_spec_cpu_period{image!=""}
+            )
           ) > 0.85
         for: 5m
         labels:
