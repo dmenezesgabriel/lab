@@ -1,0 +1,234 @@
+services:
+  prometheus:
+    extends:
+      file: base.yml
+      service: _small
+    profiles: [observability]
+    image: prom/prometheus:v3.10.0-busybox
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../services/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yml
+      - ../services/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=1d"
+    networks:
+      - lab-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    labels:
+      - "alloy_logs=true"
+
+  grafana:
+    extends:
+      file: base.yml
+      service: _logging
+    profiles: [observability]
+    # custom: between small (192 MB) and medium (384 MB); extra memory avoids SQLite page-cache I/O thrashing
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.25
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.25"
+        reservations:
+          memory: 64M
+          cpus: "0.05"
+    image: grafana/grafana:12.3.5
+    container_name: grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    expose:
+      - "3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ENABLE_GZIP: "true"
+      GF_AUTH_PROXY_ENABLED: "true"
+      GF_AUTH_PROXY_HEADER_NAME: Remote-User
+      GF_AUTH_PROXY_HEADER_PROPERTY: username
+      GF_AUTH_PROXY_AUTO_SIGN_UP: "true"
+      GF_AUTH_PROXY_HEADERS: "Name:Remote-Name Email:Remote-Email"
+      GF_AUTH_PROXY_ENABLE_LOGIN_TOKEN: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../services/grafana/grafana_datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+      - ../services/grafana/grafana_dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
+      - ../services/grafana/dashboards:/opt/grafana/dashboards
+    networks:
+      - lab-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "alloy_logs=true"
+
+  loki:
+    extends:
+      file: base.yml
+      service: _small
+    profiles: [observability]
+    image: grafana/loki:3.3.2
+    container_name: loki
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ../services/loki/loki.yaml:/etc/loki/loki.yaml
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - lab-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3100/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    labels:
+      - "alloy_logs=true"
+
+  # ---- Extras ----
+
+  cadvisor:
+    extends:
+      file: base.yml
+      service: _small
+    profiles: [observability-extras]
+    cpus: 0.50
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+          cpus: "0.50"
+        reservations:
+          memory: 64M
+          cpus: "0.05"
+    image: gcr.io/cadvisor/cadvisor:v0.55.1
+    container_name: cadvisor
+    privileged: true
+    ports:
+      - "8085:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+      - /dev/kmsg:/dev/kmsg:ro
+    command:
+      - "--housekeeping_interval=60s"
+      - "--docker_only=true"
+      - "--store_container_labels=false"
+    networks:
+      - lab-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    labels:
+      - "alloy_logs=true"
+
+  tempo:
+    extends:
+      file: base.yml
+      service: _small
+    profiles: [observability-extras]
+    image: grafana/tempo:2.7.2
+    container_name: tempo
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ../services/tempo/tempo.yaml:/etc/tempo.yaml
+      - tempo_data:/var/tempo
+    ports:
+      - "3200:3200"
+    networks:
+      - lab-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3200/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    labels:
+      - "alloy_logs=true"
+
+  alloy:
+    extends:
+      file: base.yml
+      service: _small
+    profiles: [observability-extras]
+    image: grafana/alloy:v1.11.0
+    container_name: alloy
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ../services/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - alloy_data:/var/lib/alloy/data
+    ports:
+      - "12345:12345"
+      - "12347:12347"
+    networks:
+      - lab-net
+    depends_on:
+      loki:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+    labels:
+      - "alloy_logs=true"
+
+  otel-collector:
+    extends:
+      file: base.yml
+      service: _micro
+    profiles: [observability-extras]
+    image: otel/opentelemetry-collector:0.127.0
+    container_name: otel-collector
+    command: ["--config=/etc/otel-config.yaml"]
+    volumes:
+      - ../services/otel/otel-config.yaml:/etc/otel-config.yaml
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "8889:8889"
+    networks:
+      - lab-net
+    labels:
+      - "alloy_logs=true"
+
+volumes:
+  prometheus_data:
+    name: lab-prometheus-data
+  grafana_data:
+    name: lab-grafana-data
+  loki_data:
+    name: lab-loki-data
+  tempo_data:
+    name: lab-tempo-data
+  alloy_data:
+    name: lab-alloy-data
+
+networks:
+  lab-net:
+    name: lab-net
+    driver: bridge

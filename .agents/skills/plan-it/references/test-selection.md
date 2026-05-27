@@ -21,6 +21,10 @@ If a test category is not relevant, write:
 Not applicable — <specific reason>
 ```
 
+Every specified test must be runnable headlessly with the project's existing single test command, with no manual setup or interactive input. This constraint applies to all test types: unit, integration, smoke, E2E, regression, performance, security, usability, and observability.
+
+If a specified test requires infrastructure that is not yet automated (for example, a running database or a started service), the task must include a functional requirement to automate that setup. A test that cannot run headlessly is not a valid specification.
+
 ## Test type distinction
 
 Unit tests verify isolated rules, functions, validators, mappers, permissions, reducers, hooks, and components.
@@ -109,13 +113,6 @@ Good:
   **Then** the dashboard loads without a client-side crash  
   Covers release confidence for `FR-001`.
 
-Good:
-- `SMK-002`: **Scenario**: Project creation page opens after deployment  
-  **Given** a signed-in user is on the dashboard  
-  **When** the user opens the create project page  
-  **Then** the project form is visible  
-  Covers critical path availability.
-
 Not applicable example:
 - `SMK-001`: Not applicable — this task changes only a backend validation helper and does not affect deploy availability.
 
@@ -134,13 +131,6 @@ Good:
   **When** they create a project named “Acme Migration”  
   **Then** “Acme Migration” appears in the project list  
   Covers `FR-001`, `AC-001`.
-
-Good:
-- `E2E-002`: **Scenario**: Member is blocked from project settings  
-  **Given** Bruno is a member of “Acme Migration”  
-  **When** Bruno opens the project settings page  
-  **Then** Bruno sees the access-denied page  
-  Covers `AC-004`.
 
 Not applicable example:
 - `E2E-001`: Not applicable — this task changes an isolated validation helper and no complete user journey changes.

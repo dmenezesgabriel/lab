@@ -1,0 +1,158 @@
+x-aws-env: &aws-env
+  AWS_ACCESS_KEY_ID: minioadmin
+  AWS_SECRET_ACCESS_KEY: minioadmin
+  AWS_DEFAULT_REGION: us-east-1
+  AWS_ENDPOINT_URL: http://minio:9000
+
+x-container-env: &container-env
+  NETWORK: "lab-net"
+
+x-airflow-env: &airflow-env
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+  AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT: 30
+  AIRFLOW__CORE__PARALLELISM: 1
+  AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: 1
+  AIRFLOW__CORE__LAZY_LOAD_PROVIDERS: "True"
+  AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-webserver:8080/execution/
+  AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW__API_AUTH__JWT_SECRET}
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-db:5432/airflow
+  AIRFLOW__API_SERVER__SECRET_KEY: ${AIRFLOW__API_SERVER__SECRET_KEY}
+  AIRFLOW__API_AUTH__BACKEND: airflow.api_auth.backend.basic_auth
+  AIRFLOW__LOG_RETENTION_DAYS: "7"
+  AIRFLOW__STANDARD__VENV_INSTALL_METHOD: uv
+  PYTHONWARNINGS: "ignore::SyntaxWarning"
+
+x-airflow-volumes: &airflow-volumes
+  - ../app/airflow/dags:/opt/airflow/dags
+  - ../app:/workspace
+  - /var/run/docker.sock:/var/run/docker.sock
+  - ../services/airflow/passwords.json:/opt/airflow/passwords.json
+  - airflow_logs:/opt/airflow/logs
+  - /tmp:/tmp
+  - uv_cache:/home/airflow/.cache/uv
+
+services:
+  airflow-init:
+    extends:
+      file: base.yml
+      service: _medium
+    profiles: [airflow]
+    group_add:
+      - "${DOCKER_GID:-0}"
+    build:
+      context: ..
+      dockerfile: services/airflow/Dockerfile
+    container_name: airflow-init
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    environment:
+      <<: [*aws-env, *airflow-env, *container-env]
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: admin
+      _AIRFLOW_WWW_USER_PASSWORD: admin
+      _AIRFLOW_WWW_USER_FIRSTNAME: admin
+      _AIRFLOW_WWW_USER_LASTNAME: admin
+      _AIRFLOW_WWW_USER_ROLE: Admin
+      _AIRFLOW_WWW_USER_EMAIL: admin@local
+    volumes: *airflow-volumes
+    networks:
+      - lab-net
+    command: version
+    labels:
+      - "alloy_logs=true"
+
+  airflow-webserver:
+    extends:
+      file: base.yml
+      service: _xxlarge
+    profiles: [airflow]
+    group_add:
+      - "${DOCKER_GID:-0}"
+    build:
+      context: ..
+      dockerfile: services/airflow/Dockerfile
+    container_name: airflow-webserver
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    expose:
+      - "8080"
+    environment:
+      <<: [*aws-env, *airflow-env, *container-env]
+      AIRFLOW__API_SERVER__WORKERS: 1
+      AIRFLOW__API_SERVER__WEB_SERVER_MASTER_TIMEOUT: 300
+      AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+      AUTHELIA_EXTERNAL_URL: "https://127.0.0.1:9091"
+    volumes:
+      - ../app/airflow/dags:/opt/airflow/dags
+      - ../app:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../services/airflow/webserver_config.py:/opt/airflow/webserver_config.py:ro
+      - airflow_logs:/opt/airflow/logs
+    command: api-server
+    networks:
+      - lab-net
+    env_file:
+      - ../.env
+    tmpfs:
+      - /tmp:size=128m
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    labels:
+      - "alloy_logs=true"
+
+  airflow-scheduler:
+    extends:
+      file: base.yml
+      service: _xxlarge
+    profiles: [airflow]
+    group_add:
+      - "${DOCKER_GID:-0}"
+    build:
+      context: ..
+      dockerfile: services/airflow/Dockerfile
+    container_name: airflow-scheduler
+    hostname: airflow-scheduler
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    environment:
+      <<: [*aws-env, *airflow-env, *container-env]
+      AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "True"
+      AIRFLOW__SCHEDULER__PARALLELISM: 1
+      AIRFLOW__SCHEDULER__MAX_THREADS: 1
+      AIRFLOW__SCHEDULER__PARSING_PROCESSES: 1
+      AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: 300
+      AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: 300
+    volumes: *airflow-volumes
+    command: scheduler
+    networks:
+      - lab-net
+    env_file:
+      - ../.env
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --local"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    labels:
+      - "alloy_logs=true"
+
+volumes:
+  airflow_logs:
+    name: lab-airflow-logs
+  uv_cache:
+    name: lab-uv-cache-data
+
+networks:
+  lab-net:
+    name: lab-net
+    driver: bridge

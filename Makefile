@@ -1,75 +1,101 @@
-.PHONY: up down tear-down up-llm up-adminer up-airflow up-lineage build-lambdas tf-apply
+.PHONY: up down tear-down build logs help \
+        up-storage up-modeling up-airflow up-observability up-management up-sso up-llm up-quality \
+        setup-hosts generate-oidc-key setup-sso \
+        lock-tests test-integration test-e2e test-smoke test-security
 
-UID := $(shell id -u)
-GID := $(shell id -g)
+UID        := $(shell id -u)
+GID        := $(shell id -g)
 DOCKER_GID := $(shell stat -c '%g' /var/run/docker.sock)
-DOCKER_ENV := UID=$(UID) GID=$(GID) DOCKER_GID=$(DOCKER_GID)
-COMPOSE := $(DOCKER_ENV) docker compose
-COMPOSE_ALL := $(COMPOSE) --profile "*"
-PROFILES_CORE := --profile modeling --profile model-registry
-PROFILES_ORCHESTRATION := --profile airflow
-PROFILES_MANAGEMENT := --profile management
-PROFILES_MANAGEMENT_EXTRAS := --profile management-extras
-PROFILES_OBSERVABILITY := --profile observability
-PROFILES_OBSERVABILITY_EXTRAS := --profile observability-extras
-PROFILES_SECURITY := --profile sso
-PROFILES_QUALITY := --profile quality
+COMPOSE    := UID=$(UID) GID=$(GID) DOCKER_GID=$(DOCKER_GID) docker compose
 
-PROFILES_GIVE_ME_SOME_CREDIT := \
-	$(PROFILES_CORE) \
-	$(PROFILES_ORCHESTRATION) \
-	$(PROFILES_MANAGEMENT) \
-	$(PROFILES_MANAGEMENT_EXTRAS) \
-	$(PROFILES_OBSERVABILITY) \
-	$(PROFILES_OBSERVABILITY_EXTRAS) \
-	$(PROFILES_SECURITY) \
-	$(PROFILES_QUALITY)
+MARKS       ?=
+PYTEST_MARKS = $(if $(MARKS),-m $(MARKS),)
 
-PROFILES_NYC_TAXI_TRIP := \
-	$(PROFILES_CORE) \
-	$(PROFILES_MANAGEMENT) \
-	$(PROFILES_OBSERVABILITY) \
-	$(PROFILES_SECURITY)
+# ─── All services ─────────────────────────────────────────────────────────────
 
-setup-hosts: ## Ensure *.app.localhost resolves to 127.0.0.1
+up: setup-hosts generate-oidc-key ## Start every service (all profiles)
+	$(COMPOSE) --profile '*' up -d
+
+down: ## Stop all running services
+	$(COMPOSE) --profile '*' down
+
+tear-down: ## Stop all services and delete volumes
+	$(COMPOSE) --profile '*' down -v
+
+build: ## Rebuild all custom images
+	$(COMPOSE) --profile '*' build
+
+logs: ## Follow logs for all services
+	$(COMPOSE) --profile '*' logs -f
+
+# ─── Stack targets ────────────────────────────────────────────────────────────
+
+up-storage: ## Postgres + MinIO
+	$(COMPOSE) --profile model-registry up -d
+
+up-modeling: setup-hosts ## MLflow + storage
+	$(COMPOSE) --profile model-registry up -d
+
+up-airflow: setup-hosts generate-oidc-key ## Airflow webserver + scheduler (includes storage)
+	$(COMPOSE) --profile airflow up -d
+
+up-observability: ## Prometheus + Grafana + Loki + extras
+	$(COMPOSE) --profile observability --profile observability-extras up -d
+
+up-management: setup-hosts generate-oidc-key ## Homepage + Portainer + Adminer (includes SSO)
+	$(COMPOSE) --profile sso --profile management --profile management-extras up -d
+
+up-sso: setup-hosts generate-oidc-key ## Authelia + Caddy only
+	$(COMPOSE) --profile sso up -d
+
+up-quality: ## SonarQube (includes storage)
+	$(COMPOSE) --profile quality up -d
+
+up-llm: ## llama.cpp inference server
+	$(COMPOSE) --profile llm up -d
+
+# ─── Per-service helpers ──────────────────────────────────────────────────────
+
+restart-%: ## Restart a service: make restart-grafana
+	$(COMPOSE) restart $*
+
+logs-%: ## Tail logs for a service: make logs-airflow-scheduler
+	$(COMPOSE) logs -f $*
+
+# ─── Setup ────────────────────────────────────────────────────────────────────
+
+setup-hosts: ## Add *.app.localhost → 127.0.0.1 to /etc/hosts
 	@bash scripts/setup_hosts.sh
 
-up-give-me-some-credit: generate-oidc-key setup-hosts
-	$(COMPOSE) $(PROFILES_GIVE_ME_SOME_CREDIT) up -d
-
-up-nyc-taxi-trip: generate-oidc-key setup-hosts
-	$(COMPOSE) $(PROFILES_NYC_TAXI_TRIP) up -d
-
-down:
-	$(COMPOSE_ALL) down
-
-tear-down:
-	$(COMPOSE_ALL) down -v
-
-up-%:
-	$(COMPOSE) up -d $(*)
-
-down-%:
-	$(COMPOSE) down $(*)
-
-generate-oidc-key: ## Generate RSA key for Authelia OIDC (run once)
+generate-oidc-key: ## Generate Authelia OIDC RSA key (idempotent)
 	@bash scripts/generate_oidc_key.sh
 
-setup-sso: generate-oidc-key ## Full SSO setup: generate key + start services
+setup-sso: generate-oidc-key ## Generate OIDC key and start SSO stack
 	$(COMPOSE) build airflow-webserver
-	$(COMPOSE) up -d authelia caddy portainer portainer-init airflow-webserver grafana homepage
-	@echo ""
-	@echo "SSO setup complete! Access URLs:"
-	@echo "  Auth:      https://auth.app.localhost"
-	@echo "  Grafana:   https://grafana.app.localhost"
-	@echo "  Airflow:   https://airflow.app.localhost"
-	@echo "  Portainer: https://portainer.app.localhost"
-	@echo "  Homepage:  https://home.app.localhost"
+	$(COMPOSE) --profile sso --profile management --profile management-extras up -d
+	@printf '\nSSO ready:\n  Auth:      https://auth.app.localhost\n  Airflow:   https://airflow.app.localhost\n  Grafana:   https://grafana.app.localhost\n  Portainer: https://portainer.app.localhost\n  Homepage:  https://home.app.localhost\n'
 
-build-lambdas: ## Install Lambda deps into .build/<name>/ (run before terraform apply)
-	cd app/nyc_taxi_trip && uv run scripts/build_lambdas.py
+# ─── Tests ───────────────────────────────────────────────────────────────────
 
-tf-apply: ## Plan and apply Terraform for nyc_taxi_trip (requires build-lambdas first)
-	cd app/nyc_taxi_trip/terraform && \
-	  terraform init -upgrade -input=false && \
-	  terraform apply -var="aws_endpoint=http://localhost:9002" -auto-approve
+lock-tests: ## Regenerate tests/uv.lock enforcing 7-day supply-chain age gate
+	uv lock --project tests/ --exclude-newer $(shell date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ)
+
+test-integration: ## Run integration tests in container; MARKS=<marker> to filter
+	$(COMPOSE) -f compose/tests.yml run --rm test-runner pytest $(PYTEST_MARKS) integration/
+
+test-e2e: ## Run end-to-end tests in container; MARKS=<marker> to filter
+	$(COMPOSE) -f compose/tests.yml run --rm test-runner pytest $(PYTEST_MARKS) e2e/
+
+test-smoke: ## Run smoke tests in container (builds test-runner image, checks playwright)
+	$(COMPOSE) -f compose/tests.yml run --rm test-runner pytest smoke/
+
+test-security: ## Run security tests in container (checks no secret env vars)
+	$(COMPOSE) -f compose/tests.yml run --rm test-runner pytest security/
+
+# ─── Help ─────────────────────────────────────────────────────────────────────
+
+help: ## Show available targets
+	@grep -E '^[a-zA-Z0-9_%/-]+:.*##' $(MAKEFILE_LIST) \
+	  | awk 'BEGIN {FS = ":.*##"}; {printf "  \033[36m%-26s\033[0m %s\n", $$1, $$2}'
+
+.DEFAULT_GOAL := help

@@ -75,7 +75,7 @@ identity_providers:
         # generates this callback URL from its own scheme (http).
         redirect_uris:
           - "http://airflow.app.localhost/auth/oauth-authorized/authelia"
-          - "https://127.0.0.1:8080/auth/oauth-authorized/authelia"
+          - "https://127.0.0.1:8088/auth/oauth-authorized/authelia"
         scopes:
           - "openid"
           - "profile"

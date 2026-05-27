@@ -1,0 +1,59 @@
+services:
+  sonarqube:
+    extends:
+      file: base.yml
+      service: _logging
+    profiles: [quality]
+    mem_limit: 2304m
+    memswap_limit: 2304m
+    cpus: 1.25
+    deploy:
+      resources:
+        limits:
+          memory: 2304M
+          cpus: "1.25"
+        reservations:
+          memory: 512M
+          cpus: "0.25"
+    image: sonarqube:community
+    container_name: sonarqube
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    ports:
+      - "9004:9000"
+    environment:
+      SONAR_JDBC_URL: jdbc:postgresql://postgres-db:5432/sonarqube
+      SONAR_JDBC_USERNAME: sonar
+      SONAR_JDBC_PASSWORD: sonar
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
+      SONAR_WEB_JAVAOPTS: "-Xms256m -Xmx512m"
+      SONAR_CE_JAVAOPTS: "-Xms256m -Xmx512m"
+      SONAR_SEARCH_JAVAOPTS: "-Xms512m -Xmx512m"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_logs:/opt/sonarqube/logs
+    networks:
+      - lab-net
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/9000'"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 90s
+    labels:
+      - "alloy_logs=true"
+
+volumes:
+  sonarqube_data:
+    name: lab-sonarqube-data
+  sonarqube_extensions:
+    name: lab-sonarqube-extensions
+  sonarqube_logs:
+    name: lab-sonarqube-logs
+
+networks:
+  lab-net:
+    name: lab-net
+    driver: bridge

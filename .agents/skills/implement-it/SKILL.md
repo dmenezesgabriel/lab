@@ -34,16 +34,17 @@ Do not use implement-it when:
 4. Identify relevant existing architecture, tests, conventions, components, services, boundaries, accessibility patterns, and ADRs.
 5. Implement the smallest safe vertical slice that satisfies the task. See [implementation-rules.md — Vertical-slice implementation](references/implementation-rules.md#vertical-slice-implementation).
 6. Use TDD for logic, APIs, services, domain rules, data flows, permissions, and regressions when practical. See [implementation-rules.md — TDD workflow](references/implementation-rules.md#tdd-workflow).
-7. Use Component-Driven Development for frontend UI work when practical. See [implementation-rules.md — CDD workflow](references/implementation-rules.md#component-driven-development-workflow).
+7. For frontend UI work, use CDD: identify component boundary → define props/states/a11y → implement semantic HTML first → verify isolated states (loading, error, disabled, success) → compose into the page. See [implementation-rules.md — CDD workflow](references/implementation-rules.md#component-driven-development-workflow) for full patterns and examples.
 8. Use semantic HTML and native controls before ARIA for frontend work. Treat accessibility as part of component behavior, not final polish. See [implementation-rules.md — Semantic HTML and accessibility](references/implementation-rules.md#semantic-html-and-accessibility).
 9. Apply design principles selectively — read [design-rules.md](references/design-rules.md) when a design decision arises.
 10. Preserve architecture boundaries and dependency direction.
-11. Add or update only meaningful tests. Read [testing-rules.md](references/testing-rules.md) before adding or changing any test type.
-12. Add or update logs, metrics, traces, and analytics only when required by the task or risk.
+11. Add or update only meaningful tests. Every new test must run with the project's single test command (e.g. `pytest`, `npm test`) without manual setup or interactive input. If a test requires infrastructure that is not yet automated, automating it is part of this task — not a follow-up. Read [testing-rules.md](references/testing-rules.md) before adding or changing any test type.
+12. Add or update logs, metrics, traces, and analytics only when required by the task. When adding logs, use structured format with named fields (`event=`, `field=`, `value=`), not prose sentences. Applies only to logs modified in this task.
 13. Update ADRs when implementation confirms, changes, or rejects architectural assumptions. Read [adr-implementation-rules.md](references/adr-implementation-rules.md) only when touching an ADR-backed decision.
 14. Validate with the relevant test, lint, typecheck, build, accessibility, and runtime checks. If validation fails, fix the root cause — do not disable linting, skip tests, or use `--force` flags. If a failure is pre-existing and out of scope, document it in the summary under "Unresolved assumptions". See [implementation-rules.md — Validation loop](references/implementation-rules.md#validation-loop).
-15. Write a short implementation summary. Read [output-rules.md](references/output-rules.md) before writing.
-16. If domain terms were defined or clarified during implementation, add them to `CONTEXT.md` at the project root using the format in the existing entries or [assets/context-template.md](assets/context-template.md) if it exists.
+15. Re-read the issue and verify every AC-*, FR-*, NFR-*, and OBS-* item against the actual code — not the intended design. For each item, state explicitly whether the code satisfies it. Fix any that do not before writing the summary.
+16. Write a short implementation summary. Read [output-rules.md](references/output-rules.md) before writing.
+17. If domain terms were defined or clarified during implementation, add them to `CONTEXT.md` at the project root using the format in the existing entries.
 
 ## Output files
 
@@ -57,6 +58,7 @@ See [output-rules.md](references/output-rules.md) for naming and report structur
 
 ## Before marking complete
 
+- [ ] Every AC-*, FR-*, NFR-*, OBS-* from the issue verified against actual code
 - [ ] Accessibility checks completed if any UI was touched
 - [ ] No unrelated files modified
 
@@ -69,7 +71,7 @@ If a validation check (test, lint, build) fails after implementation:
 
 ## Anti-patterns to avoid
 
-**Scope creep rewrite**: Do not rewrite working code unless it is directly required by the task. Every line changed beyond the task scope is unreviewed risk introduced without a corresponding requirement.
+**Scope creep**: Do not rewrite working code unless directly required by the task.
 
 **Pattern-first architecture**: Do not introduce a new architectural pattern mid-task without an ADR. If the pattern is needed, write the ADR first, then implement.
 
@@ -80,6 +82,14 @@ If a validation check (test, lint, build) fails after implementation:
 **Unjustified "not applicable"**: Do not mark a test type as not applicable unless you have a concrete reason. State the reason in the summary.
 
 **Convention override**: If the codebase uses a different convention than what you would normally choose, follow the codebase convention. Consistency outranks personal preference.
+
+**Unannotated interfaces**: In typed languages (TypeScript, Python, Go, Java, Kotlin, Rust), every new/modified public function, return type, and class field needs an explicit type annotation. Not applicable to untyped languages.
+
+**Generic naming**: Avoid `data`, `handler`, `result`, `item`, `Manager` — use names from the project's domain vocabulary.
+
+**Deep nesting**: Keep new code ≤2–3 nesting levels. Use guard clauses and early returns.
+
+**Vague error messages**: Every exception must include the offending value and expected constraint, not just a label. Example: `ValueError(f"Unknown adapter {name!r}; expected one of {list(registry)}")` not `ValueError("Invalid adapter")`.
 
 **Routine ADR update**: Do not update ADRs for routine changes. Update only when implementation confirms, changes, or rejects an architectural assumption.
 

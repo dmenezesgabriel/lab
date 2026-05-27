@@ -1,0 +1,34 @@
+services:
+  llamacpp:
+    extends:
+      file: base.yml
+      service: _large
+    profiles: [llm]
+    image: ghcr.io/ggml-org/llama.cpp:server
+    container_name: llamacpp
+    ports:
+      - "8000:8080"
+    volumes:
+      - llama_cache:/root/.cache/llama.cpp
+    networks:
+      - lab-net
+    command: >
+      -hf LiquidAI/LFM2.5-350M-GGUF:Q4_K_M
+      -c 4096
+      -t 8
+      --host 0.0.0.0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  llama_cache:
+    name: lab-llamacpp-cache-data
+
+networks:
+  lab-net:
+    name: lab-net
+    driver: bridge

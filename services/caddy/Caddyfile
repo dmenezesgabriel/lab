@@ -70,7 +70,7 @@ https://127.0.0.1:9091 {
 }
 
 # Airflow — SSO gated + internal OIDC auth
-https://127.0.0.1:8080 {
+https://127.0.0.1:8088 {
 	bind 0.0.0.0
 	tls internal
 	import authelia

@@ -66,9 +66,3 @@ scrape_configs:
   - job_name: "alloy"
     static_configs:
       - targets: ["alloy:12345"]
-
-  # requires: observability-extras profile
-  - job_name: "pushgateway"
-    honor_labels: true
-    static_configs:
-      - targets: ["pushgateway:9091"]

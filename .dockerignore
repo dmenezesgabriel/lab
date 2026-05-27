@@ -10,4 +10,10 @@ __pycache__/
 .venv/
 .uv/
 
+# Exclude local node artifacts
+node_modules/
+
 .env
+
+*.db
+*.sqlite

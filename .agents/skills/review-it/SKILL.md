@@ -11,7 +11,7 @@ Review an implementation against its task contract.
 
 This skill is task-aware: it reads the related `tasks/issues/` file to extract functional requirements, non-functional requirements, acceptance criteria, observability requirements, and required tests — then evaluates the actual implementation against that structured contract.
 
-Each finding is classified as **Blocking** (prevents mark-complete), **Non-blocking** (should be addressed but does not block), or **Suggestion** (optional improvement).
+Each finding is classified as **Blocking** (violates a named FR/AC/NFR/OBS/security requirement from the issue), **Non-blocking** (gap that should be addressed but does not prevent completion), or **Suggestion** (optional improvement, never blocks). See [review-rules.md — Finding classification](references/review-rules.md#finding-classification) for exact criteria.
 
 This skill is read-only. It does not modify source files. It writes only the review report.
 
@@ -31,16 +31,16 @@ Do not use review-it when:
 2. Identify the issue file to review. Accept it from the user argument, search `tasks/issues/` for the relevant file, or read the most recently modified issue. If no issue file can be identified, stop and ask the user to specify one — do not proceed without a task contract. (See [review-rules.md — Issue identification](references/review-rules.md#issue-identification).)
 3. Read the issue file and extract: FRs, NFRs, ACs, OBS requirements, Required Tests, and any ADR dependencies listed under Dependencies.
 4. Read the implementation summary in `tasks/implementation/` if one exists for this issue. It records what the implementer believed was done.
-5. Inspect the actual code changes using `git diff` against the base branch, or explicit file paths provided by the user. Do not rely solely on the implementation summary — verify against the code. (See [review-rules.md — Code inspection](references/review-rules.md#code-inspection).)
-6. Inspect existing project conventions by reading comparable files: similar services, components, tests, or configuration files. Evaluate whether the implementation follows established patterns.
-7. Evaluate each acceptance criterion (`AC-*`): determine Pass or Fail based on what the code actually does.
+5. Inspect the actual code changes using `git diff` against the base branch, or explicit file paths provided by the user. Do not rely solely on the implementation summary — verify against the code. (See [review-rules.md — Code inspection](references/review-rules.md#code-inspection).) Implementation sessions are subject to attention pressure: a requirement that was read early in the session may have been silently dropped rather than consciously descoped. Treat a requirement that is absent from the code as a candidate finding to be classified — not a silent pass.
+6. Inspect project conventions by reading comparable files (similar services, components, tests). Flag generic names (`data`, `handler`, `result`, `item`, `Manager`) as Non-blocking. For typed languages, flag missing type annotations on new/modified public signatures as Non-blocking. Both are Non-blocking unless an AC explicitly required otherwise.
+7. Evaluate each `AC-*`: restate it, inspect the code for evidence, mark **Pass** or **Fail**. Never mark Pass without code evidence; never mark Fail without code evidence. If Fail, add a Blocking finding with the AC ID and a concrete description of what is missing.
 8. Evaluate test coverage: for each required test category in the issue, determine whether matching tests exist and cover the linked requirement IDs.
 9. Evaluate observability: for each `OBS-*` requirement, determine whether the implementation includes the required log, metric, trace, or analytics call.
 10. Evaluate ADR compliance: if the issue lists ADR files under Dependencies, check whether those ADRs were updated from `Proposed` to `Accepted` or `Rejected` as required by the task's Definition of Done.
 11. Classify each finding as **Blocking**, **Non-blocking**, or **Suggestion**. Read [review-rules.md — Finding classification](references/review-rules.md#finding-classification) for the exact criteria.
 12. Determine the overall verdict: **Pass** if there are zero Blocking findings; **Fail** if there is one or more.
 13. Write the review report in `tasks/reviews/`. Read [output-rules.md](references/output-rules.md) before writing. Use [assets/review-report-template.md](assets/review-report-template.md) as the exact structure.
-14. If domain terms were defined or clarified during review, add them to `CONTEXT.md` at the project root using the format in the existing entries or [assets/context-template.md](assets/context-template.md) if it exists.
+14. If domain terms were defined or clarified during review, add them to `CONTEXT.md` at the project root using the format in the existing entries.
 
 ## Output files
 
@@ -64,17 +64,9 @@ If files cannot be created:
 
 ## Anti-patterns to avoid
 
-**Summary-only review**: Do not rely on the implementation summary alone. Summaries describe what the implementer believed they did, not what the code actually does. Always inspect the code.
+**Code-driven, contract-bound**: Always inspect the actual code — not the implementation summary. Evaluate only against named FR/AC/NFR/OBS/security requirements in the issue. Link every Blocking finding to a specific requirement ID. Flag ambiguities explicitly under "Unresolved Assumptions" — never invent contract terms.
 
-**Vague finding classification**: Do not write Blocking findings without linking a specific requirement or acceptance criterion ID. A finding that says "code quality is poor" is not actionable. A finding that says "AC-003 fails: style inconsistency appears as Blocking, but should be Suggestion per NFR-002" is.
-
-**Blocking inflation**: Do not classify style preferences, naming conventions, or non-contractual improvements as Blocking. Reserve Blocking for failures that directly violate a named FR, NFR, AC, OBS, or security requirement from the issue.
-
-**Requirement invention**: Do not block an implementation for a requirement that is not in the issue. Only evaluate against requirements explicitly stated in the task contract. If you believe a missing requirement is important, raise it as a Suggestion or Non-blocking finding with a recommendation to add it to a follow-up task.
-
-**Silent scope assumption**: If the user provides a file path or diff instead of an issue file, and requirements are ambiguous, flag the ambiguity explicitly in the report under "Unresolved Assumptions" — do not silently invent contract terms.
-
-**ADR over-checking**: Do not flag ADR updates as Blocking unless the task's Definition of Done explicitly required it. If the task said ADRs would be updated and they were not, that is Blocking. If the task's DoD was silent on ADR updates and none were needed, that is not a finding.
+**Right-sized findings**: Reserve Blocking for requirement violations only. Style preferences, naming conventions, and non-contractual improvements are Non-blocking or Suggestion. ADR updates are Blocking only when the task's Definition of Done explicitly required them.
 
 ## Final response
 

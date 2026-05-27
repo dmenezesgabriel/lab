@@ -1,0 +1,67 @@
+services:
+  authelia:
+    extends:
+      file: base.yml
+      service: _medium
+    profiles: [sso]
+    image: authelia/authelia:4.39
+    container_name: authelia
+    environment:
+      X_AUTHELIA_CONFIG_FILTERS: template
+    volumes:
+      - ../services/authelia:/config:ro
+      - authelia_data:/data
+    networks:
+      - lab-net
+    expose:
+      - "9091"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9091/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    labels:
+      - "alloy_logs=true"
+
+  caddy:
+    extends:
+      file: base.yml
+      service: _small
+    profiles: [sso]
+    image: caddy:2.11-alpine
+    container_name: caddy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8088:8080"   # airflow
+      - "3001:3001"   # grafana (:3000 taken by homepage)
+      - "9000:9000"   # portainer
+      - "9091:9091"   # authelia portal
+    volumes:
+      - ../services/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    networks:
+      - lab-net
+    depends_on:
+      authelia:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "alloy_logs=true"
+
+volumes:
+  authelia_data:
+    name: lab-authelia-data
+  caddy_data:
+    name: lab-caddy-data
+
+networks:
+  lab-net:
+    name: lab-net
+    driver: bridge

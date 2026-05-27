@@ -1,0 +1,104 @@
+services:
+  homepage:
+    extends:
+      file: base.yml
+      service: _small
+    profiles: [management]
+    image: ghcr.io/gethomepage/homepage:v1.13.1
+    container_name: homepage
+    ports:
+      - "3000:3000"
+    environment:
+      HOMEPAGE_ALLOWED_HOSTS: "home.app.localhost,localhost"
+    volumes:
+      - ../services/homepage:/app/config
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - lab-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    labels:
+      - "alloy_logs=true"
+
+  adminer:
+    extends:
+      file: base.yml
+      service: _small
+    profiles: [management-extras]
+    image: adminer:5.4.1
+    container_name: adminer
+    ports:
+      - "8082:8080"
+    networks:
+      - lab-net
+    environment:
+      - ADMINER_DEFAULT_SERVER=postgres-db
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8080 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "alloy_logs=true"
+
+  portainer:
+    extends:
+      file: base.yml
+      service: _small
+    profiles: [management-extras]
+    image: portainer/portainer-ce:2.39.0-alpine
+    container_name: portainer
+    # 1. docker run --rm httpd:2.4-alpine htpasswd -nbB admin 'superpassword' | cut -d ":" -f 2
+    # 2. Escape each $ with another $
+    command: --admin-password '$$2y$$05$$v1jZdrzA6cdaii29.kpMsu1tFC9OHDDF8rj9LeSNRPGeHUcT.WOS.' # superpassword
+    expose:
+      - "9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
+      - lab-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9000/api/system/status || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    labels:
+      - "alloy_logs=true"
+
+  portainer-init:
+    extends:
+      file: base.yml
+      service: _micro
+    profiles: [management-extras]
+    image: curlimages/curl:8.14.1
+    container_name: portainer-init
+    depends_on:
+      portainer:
+        condition: service_healthy
+      authelia:
+        condition: service_healthy
+    volumes:
+      - ../scripts/setup_portainer_oauth.sh:/setup.sh:ro
+    entrypoint: ["sh", "/setup.sh"]
+    environment:
+      PORTAINER_EXTERNAL_URL: "https://127.0.0.1:9000"
+      AUTHELIA_EXTERNAL_URL: "https://127.0.0.1:9091"
+    networks:
+      - lab-net
+    restart: "no"
+
+volumes:
+  portainer_data:
+    name: lab-portainer-data
+
+networks:
+  lab-net:
+    name: lab-net
+    driver: bridge

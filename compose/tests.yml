@@ -1,0 +1,19 @@
+services:
+  test-runner:
+    image: lab-test-runner
+    build:
+      context: ../tests
+      dockerfile: Dockerfile
+    volumes:
+      - ../tests:/tests:ro
+      - ../:/workspace:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    networks:
+      - lab-net
+
+networks:
+  lab-net:
+    external: true
+    name: lab-net

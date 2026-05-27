@@ -1,5 +1,0 @@
-REMOVE:
-
-- Marquez
-- Pushgateway
-- Jupyter

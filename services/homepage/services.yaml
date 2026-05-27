@@ -1,14 +1,4 @@
 - LAB:
-    - Jupyter Lab:
-        href: http://localhost:8888
-        description: Notebooks
-        icon: jupyter.png
-        widget:
-          type: docker
-          container: jupyter
-          server: my-docker
-          stats: true
-
     - MLflow:
         href: http://localhost:5000
         description: Experiment tracking
@@ -20,7 +10,7 @@
           stats: true
 
     - Airflow:
-        href: https://127.0.0.1:8080
+        href: https://127.0.0.1:8088
         description: Pipeline orchestration
         icon: apache-airflow.png
         widget:

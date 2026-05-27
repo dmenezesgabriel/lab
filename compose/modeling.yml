@@ -1,0 +1,50 @@
+x-aws-env: &aws-env
+  AWS_ACCESS_KEY_ID: minioadmin
+  AWS_SECRET_ACCESS_KEY: minioadmin
+  AWS_DEFAULT_REGION: us-east-1
+  AWS_ENDPOINT_URL: http://minio:9000
+
+services:
+  mlflow:
+    extends:
+      file: base.yml
+      service: _large
+    profiles: [model-registry]
+    build:
+      context: ..
+      dockerfile: services/mlflow/Dockerfile
+    container_name: mlflow
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    ports:
+      - "5000:5000"
+    environment:
+      <<: *aws-env
+      MLFLOW_TRACKING_URI: postgresql://mlflow:mlflow@postgres-db:5432/mlflow
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --workers 1
+      --backend-store-uri postgresql://mlflow:mlflow@postgres-db:5432/mlflow
+      --artifacts-destination s3://mlflow-artifacts
+      --allowed-hosts "*"
+    networks:
+      - lab-net
+    healthcheck:
+      test:
+        ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    labels:
+      - "alloy_logs=true"
+
+networks:
+  lab-net:
+    name: lab-net
+    driver: bridge
