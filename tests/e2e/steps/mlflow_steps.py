@@ -1,5 +1,5 @@
 """Step definitions for the MLflow E2E scenario (E2E-004)."""
-from playwright.sync_api import Page
+from playwright.sync_api import Page, Response
 from pytest_bdd import given, when, then
 
 
@@ -13,7 +13,10 @@ def model_registry_stack_running() -> None:
     target_fixture="navigated_page",
 )
 def navigate_to_mlflow(page: Page) -> Page:
-    page.goto("http://mlflow:5000", wait_until="networkidle", timeout=10_000)
+    response: Response | None = page.goto(
+        "http://mlflow:5000", wait_until="networkidle", timeout=10_000
+    )
+    page.last_response = response  # type: ignore[attr-defined]
     return page
 
 
@@ -21,11 +24,13 @@ def navigate_to_mlflow(page: Page) -> Page:
 def mlflow_no_5xx(navigated_page: Page) -> None:
     url = navigated_page.url
     title = navigated_page.title()
-    # A 5xx response in a browser-rendered SPA typically results in a blank page
-    # or an error heading — check that the body has visible text content.
-    body_text = navigated_page.inner_text("body")
-    assert body_text.strip(), (
-        f"url={url!r} title={title!r}: page body is empty, likely a 5xx or failed load"
+    response: Response | None = navigated_page.last_response  # type: ignore[attr-defined]
+    assert response is not None, (
+        f"url={url!r} title={title!r}: page.goto returned None (non-HTTP navigation?)"
+    )
+    status = response.status
+    assert status < 500, (
+        f"url={url!r} title={title!r}: expected non-5xx response, got HTTP {status}"
     )
 
 

@@ -23,12 +23,15 @@ def navigate_to_airflow(page: Page) -> Page:
 @then("the HTTP response status is not 5xx")
 def airflow_not_5xx(navigated_page: Page) -> None:
     url = navigated_page.url
+    title = navigated_page.title()
     response: Response | None = navigated_page.last_response  # type: ignore[attr-defined]
-    if response is not None:
-        status = response.status
-        assert status < 500, (
-            f"url={url!r}: expected non-5xx response, got HTTP {status}"
-        )
+    assert response is not None, (
+        f"url={url!r} title={title!r}: page.goto returned None (non-HTTP navigation?)"
+    )
+    status = response.status
+    assert status < 500, (
+        f"url={url!r} title={title!r}: expected non-5xx response, got HTTP {status}"
+    )
 
 
 @then("the rendered page is not blank")

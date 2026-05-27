@@ -30,6 +30,7 @@ def homepage_title_contains(navigated_page: Page) -> None:
 def no_console_errors(navigated_page: Page) -> None:
     errors = navigated_page.console_errors  # type: ignore[attr-defined]
     url = navigated_page.url
+    title = navigated_page.title()
     assert not errors, (
-        f"url={url!r}: unhandled console errors={errors!r}"
+        f"url={url!r} title={title!r}: unhandled console errors={errors!r}"
     )
