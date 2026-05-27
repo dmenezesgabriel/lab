@@ -1,7 +1,7 @@
 ---
 id: "006"
 created: 2026-05-26
-updated: 2026-05-26
+updated: 2026-05-27
 status: active
 ---
 
@@ -90,7 +90,7 @@ This keeps faro traces going to Tempo via otel-collector, which is the intended 
 ## Non-Functional Requirements
 
 - `NFR-001`: Alloy memory usage must not increase after the change (removing a receiver frees memory).
-- `NFR-002`: Alloy config must be syntactically valid — `alloy fmt --no-write services/alloy/config.alloy` must exit 0.
+- `NFR-002`: Alloy config must be syntactically valid — `alloy fmt --test services/alloy/config.alloy` must exit 0.
 
 ## Observability Requirements
 
@@ -101,7 +101,7 @@ This keeps faro traces going to Tempo via otel-collector, which is the intended 
 
 - `AC-001`: **Given** the updated alloy config, **When** `grep "otelcol.receiver.otlp" services/alloy/config.alloy` runs, **Then** it returns no matches.
 - `AC-002`: **Given** alloy is restarted with the updated config, **When** `curl -s http://localhost:12345/-/ready` runs, **Then** it returns HTTP 200.
-- `AC-003`: **Given** the faro receiver is active, **When** a browser span is received by alloy, **Then** `alloy_otelcol_exporter_sent_spans_total{exporter="otelcol/otelcol"}` metric increments in the Alloy UI.
+- `AC-003`: **Given** the faro receiver is active, **When** a browser span is received by alloy, **Then** `otelcol_exporter_sent_spans_total{exporter="otlp/otelcol.exporter.otlp.otelcol"}` metric increments in the Alloy UI.
 - `AC-004`: **Given** the updated config, **When** `grep "otelcol.exporter.otlp" services/alloy/config.alloy` runs, **Then** exactly one block named `"otelcol"` (targeting otel-collector) is present — no `"tempo"` block exists.
 
 ## Required Tests
@@ -145,7 +145,7 @@ Not applicable — no user-facing behavior.
 ### Observability Tests
 
 - `OT-001`: After restarting alloy, visit `http://localhost:12345` (Alloy UI), navigate to the graph view, and verify no component shows a red error state. Covers `OBS-002`, `AC-002`.
-- `OT-002`: Query `alloy_otelcol_exporter_sent_spans_total` in Prometheus; after any faro trace is received, verify the counter increments for the `otelcol/otelcol` exporter. Covers `AC-003`, `OBS-001`.
+- `OT-002`: Query `otelcol_exporter_sent_spans_total` in Prometheus; after any faro trace is received, verify the counter increments for the `otlp/otelcol.exporter.otlp.otelcol` exporter. Covers `AC-003`, `OBS-001`.
 
 ## Definition of Done
 

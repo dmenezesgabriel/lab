@@ -16,6 +16,7 @@ scrape_configs:
     static_configs:
       - targets: ["prometheus:9090"]
 
+  # requires: observability-extras profile
   - job_name: "cadvisor"
     scrape_interval: 60s
     static_configs:
@@ -50,20 +51,23 @@ scrape_configs:
       - targets: ["loki:3100"]
     metrics_path: /metrics
 
-  # Tempo internal metrics
+  # Tempo internal metrics — requires: observability-extras profile
   - job_name: "tempo"
     static_configs:
       - targets: ["tempo:3200"]
     metrics_path: /metrics
 
+  # requires: observability-extras profile
   - job_name: "otel-collector"
     static_configs:
       - targets: ["otel-collector:8889"]
 
+  # requires: observability-extras profile
   - job_name: "alloy"
     static_configs:
       - targets: ["alloy:12345"]
 
+  # requires: observability-extras profile
   - job_name: "pushgateway"
     honor_labels: true
     static_configs:

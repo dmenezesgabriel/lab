@@ -57,7 +57,7 @@ On reflection: the correct fix for items 3 is to add `# custom — see comment` 
 
 - `FR-001`: `ghcr.io/gethomepage/homepage` must be pinned to a specific semver tag (e.g., `v1.x.y`).
 - `FR-002`: `minio/minio` must be updated to the current stable release tag.
-- `FR-003`: `minio/mc` must be updated to a release tag from the same era as the minio server update.
+- `FR-003`: `minio/mc` must be pinned to the latest available stable release. If no release exists from the same era as the minio server update, the latest available tag satisfies this requirement (confirmed: `RELEASE.2025-08-13T08-35-41Z` is the latest mc release as of 2026-05-27).
 - `FR-004`: `grafana` and `marquez` inline resource blocks must each have a comment explaining why they do not use a named anchor.
 - `FR-005`: No resource values in `grafana` or `marquez` may change — only add documentation comments.
 
@@ -74,7 +74,7 @@ On reflection: the correct fix for items 3 is to add `# custom — see comment` 
 
 - `AC-001`: **Given** the updated `docker-compose.yml`, **When** `grep "homepage:latest" docker-compose.yml` runs, **Then** it returns no matches.
 - `AC-002`: **Given** the updated `docker-compose.yml`, **When** `grep "minio/minio:RELEASE.2025-09" docker-compose.yml` runs, **Then** it returns no matches.
-- `AC-003`: **Given** the updated `docker-compose.yml`, **When** `grep "minio/mc:RELEASE.2025-08" docker-compose.yml` runs, **Then** it returns no matches.
+- `AC-003`: **Given** the updated `docker-compose.yml`, **When** `grep "minio/mc:RELEASE.2025-08-13T08-35-41Z" docker-compose.yml` runs, **Then** it returns a match (confirming mc is pinned to the latest known stable release). *(Revised 2026-05-27: original criterion checked that the August tag was absent, but `RELEASE.2025-08-13T08-35-41Z` is the latest upstream release — removing it would require a downgrade.)*
 - `AC-004`: **Given** the updated `docker-compose.yml`, **When** `docker compose config --quiet` runs, **Then** it exits 0.
 
 ## Required Tests
