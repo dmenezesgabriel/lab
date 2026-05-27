@@ -1,0 +1,270 @@
+{
+    "description": "Lab - Docker service logs (Grafana Alloy). For pipeline/OTEL logs see Pipelines dashboard.",
+    "editable": true,
+    "graphTooltip": 1,
+    "links": [
+        {
+            "title": "Overview",
+            "url": "/d/lab-overview",
+            "type": "link",
+            "icon": "external link"
+        },
+        {
+            "title": "Pipelines",
+            "url": "/d/lab-services",
+            "type": "link",
+            "icon": "external link"
+        },
+        {
+            "title": "Resources",
+            "url": "/d/lab-resources",
+            "type": "link",
+            "icon": "external link"
+        }
+    ],
+    "panels": [
+        {
+            "id": 1,
+            "type": "row",
+            "title": "Log explorer — docker services",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 0
+            }
+        },
+        {
+            "id": 2,
+            "type": "timeseries",
+            "title": "Log volume — $service",
+            "description": "Log lines/s per Docker Compose service from Grafana Alloy",
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "gridPos": {
+                "h": 5,
+                "w": 24,
+                "x": 0,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "fillOpacity": 10,
+                        "lineWidth": 1,
+                        "showPoints": "never"
+                    }
+                }
+            },
+            "options": {
+                "legend": {
+                    "calcs": [],
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "multi"
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "loki",
+                        "uid": "${loki}"
+                    },
+                    "expr": "sum by (service) (rate({environment=\"lab\", source=\"docker\", service=~\"$service\"}[2m]))",
+                    "legendFormat": "{{service}}",
+                    "refId": "A"
+                }
+            ]
+        },
+        {
+            "id": 3,
+            "type": "logs",
+            "title": "Logs — $service",
+            "description": "Streamed from Grafana Alloy. Query with low-cardinality labels: environment, source, service, container, compose_project.",
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "gridPos": {
+                "h": 14,
+                "w": 24,
+                "x": 0,
+                "y": 6
+            },
+            "options": {
+                "dedupStrategy": "none",
+                "enableLogDetails": true,
+                "showLabels": true,
+                "showTime": true,
+                "sortOrder": "Descending",
+                "wrapLogMessage": true
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "loki",
+                        "uid": "${loki}"
+                    },
+                    "expr": "{environment=\"lab\", source=\"docker\", service=~\"$service\"} |= `$search`",
+                    "refId": "A"
+                }
+            ]
+        },
+        {
+            "id": 10,
+            "type": "row",
+            "title": "Errors & warnings — docker services",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 20
+            }
+        },
+        {
+            "id": 11,
+            "type": "logs",
+            "title": "Errors",
+            "description": "error, exception, critical, fatal, traceback — Docker containers only",
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "gridPos": {
+                "h": 9,
+                "w": 12,
+                "x": 0,
+                "y": 21
+            },
+            "options": {
+                "dedupStrategy": "none",
+                "enableLogDetails": true,
+                "showLabels": true,
+                "showTime": true,
+                "sortOrder": "Descending",
+                "wrapLogMessage": true
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "loki",
+                        "uid": "${loki}"
+                    },
+                    "expr": "{environment=\"lab\", source=\"docker\", service=~\"$service\"} |~ `(?i)(error|exception|critical|fatal|traceback)`",
+                    "refId": "A"
+                }
+            ]
+        },
+        {
+            "id": 12,
+            "type": "logs",
+            "title": "Warnings",
+            "description": "warn / warning lines excluding errors — Docker containers only",
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "gridPos": {
+                "h": 9,
+                "w": 12,
+                "x": 12,
+                "y": 21
+            },
+            "options": {
+                "dedupStrategy": "none",
+                "enableLogDetails": true,
+                "showLabels": true,
+                "showTime": true,
+                "sortOrder": "Descending",
+                "wrapLogMessage": true
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "loki",
+                        "uid": "${loki}"
+                    },
+                    "expr": "{environment=\"lab\", source=\"docker\", service=~\"$service\"} |~ `(?i)(warn|warning)` !~ `(?i)(error|critical|fatal)`",
+                    "refId": "A"
+                }
+            ]
+        }
+    ],
+    "refresh": "2m",
+    "schemaVersion": 38,
+    "tags": [
+        "lab"
+    ],
+    "templating": {
+        "list": [
+            {
+                "name": "loki",
+                "type": "datasource",
+                "query": "loki",
+                "refresh": 1,
+                "label": "Loki"
+            },
+            {
+                "name": "service",
+                "type": "query",
+                "label": "Service",
+                "datasource": {
+                    "type": "loki",
+                    "uid": "${loki}"
+                },
+                "definition": "",
+                "query": {
+                    "label": "service",
+                    "stream": "{environment=\"lab\", source=\"docker\"}",
+                    "type": 1
+                },
+                "allValue": ".+",
+                "includeAll": true,
+                "multi": true,
+                "refresh": 2,
+                "sort": 1,
+                "hide": 0,
+                "current": {
+                    "selected": true,
+                    "text": "All",
+                    "value": "$__all"
+                }
+            },
+            {
+                "name": "search",
+                "type": "textbox",
+                "label": "Search",
+                "query": "",
+                "hide": 0,
+                "current": {
+                    "value": ""
+                },
+                "options": [
+                    {
+                        "selected": true,
+                        "text": "",
+                        "value": ""
+                    }
+                ]
+            }
+        ]
+    },
+    "time": {
+        "from": "now-1h",
+        "to": "now"
+    },
+    "timezone": "browser",
+    "title": "Lab - Logs",
+    "uid": "lab-logs",
+    "version": 1
+}

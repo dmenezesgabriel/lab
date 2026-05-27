@@ -1,0 +1,956 @@
+x-aws-env: &aws-env
+  AWS_ACCESS_KEY_ID: minioadmin
+  AWS_SECRET_ACCESS_KEY: minioadmin
+  AWS_DEFAULT_REGION: us-east-1
+  AWS_ENDPOINT_URL: http://minio:9000
+
+x-container-env: &container-env
+  NETWORK: "lab-net"
+
+x-airflow-env: &airflow-env
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+  AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT: 30
+  AIRFLOW__CORE__PARALLELISM: 1
+  AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: 1
+  AIRFLOW__CORE__LAZY_LOAD_PROVIDERS: "True"
+  AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-webserver:8080/execution/
+  AIRFLOW__API_AUTH__JWT_SECRET: "OpN6nUDy6b+Wa4QF6TPQsMcVxltHBV8PC8FvofpWLMM="
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-db:5432/airflow
+  AIRFLOW__API_SERVER__SECRET_KEY: "your-super-secret-key-change-me"
+  AIRFLOW__API_AUTH__BACKEND: airflow.api_auth.backend.basic_auth
+  AIRFLOW__LOG_RETENTION_DAYS: "7"
+  AIRFLOW__STANDARD__VENV_INSTALL_METHOD: uv
+  PYTHONWARNINGS: "ignore::SyntaxWarning"
+
+x-airflow-volumes: &airflow-volumes
+  - ./app/airflow/dags:/opt/airflow/dags
+  - ./app:/workspace
+  - /var/run/docker.sock:/var/run/docker.sock
+  - ./services/airflow/passwords.json:/opt/airflow/passwords.json
+  - airflow_logs:/opt/airflow/logs
+  - /tmp:/tmp # SageMaker local mode writes compose files read by Docker daemon
+  - uv_cache:/home/airflow/.cache/uv # shared venv download cache
+
+# Log rotation — prevents unbounded log growth and I/O pressure
+x-logging: &default-logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "5m"
+      max-file: "3"
+
+x-resources-micro: &resources-micro
+  <<: *default-logging
+  mem_limit: 96m
+  memswap_limit: 96m
+  cpus: 0.15
+  deploy:
+    resources:
+      limits:
+        memory: 96M
+        cpus: "0.15"
+      reservations:
+        memory: 32M
+        cpus: "0.05"
+
+# Tight cap for always-on infra/UI tools that are mostly idle
+x-resources-small: &resources-small
+  <<: *default-logging
+  mem_limit: 192m
+  memswap_limit: 192m
+  cpus: 0.25
+  deploy:
+    resources:
+      limits:
+        memory: 192M
+        cpus: "0.25"
+      reservations:
+        memory: 64M
+        cpus: "0.05"
+
+# Medium for supporting services with occasional bursts
+x-resources-medium: &resources-medium
+  <<: *default-logging
+  mem_limit: 384m
+  memswap_limit: 384m
+  cpus: 0.50
+  deploy:
+    resources:
+      limits:
+        memory: 384M
+        cpus: "0.50"
+      reservations:
+        memory: 128M
+        cpus: "0.10"
+
+# Generous for services that run actual workloads
+x-resources-large: &resources-large
+  <<: *default-logging
+  mem_limit: 512m
+  memswap_limit: 512m
+  cpus: 0.75
+  deploy:
+    resources:
+      limits:
+        memory: 512M
+        cpus: "0.75"
+      reservations:
+        memory: 192M
+        cpus: "0.25"
+
+x-resources-xlarge: &resources-xlarge
+  <<: *default-logging
+  mem_limit: 1g
+  memswap_limit: 1g
+  cpus: 1.5
+  deploy:
+    resources:
+      limits:
+        memory: 1G
+        cpus: "1.5"
+      reservations:
+        memory: 256M
+        cpus: "0.25"
+
+x-resources-xxlarge: &resources-xxlarge
+  <<: *default-logging
+  mem_limit: 1536m
+  memswap_limit: 1536m
+  cpus: 2
+  deploy:
+    resources:
+      limits:
+        memory: 1536M
+        cpus: "2"
+      reservations:
+        memory: 384M
+        cpus: "0.25"
+
+services:
+  # ---- Development ----
+
+  jupyter:
+    profiles:
+      - modeling
+    <<: *resources-xlarge # needs headroom for data processing
+    build:
+      context: .
+      dockerfile: services/jupyter/Dockerfile
+    container_name: jupyter
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./app:/app
+      - uv_cache:/root/.cache/uv
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp:/tmp # for sagemaker[local] usage
+    environment:
+      <<: [*aws-env, *container-env]
+      JUPYTER_TOKEN: ""
+      JUPYTER_ENABLE_LAB: "yes"
+      # DOCKER_BUILDKIT: 1
+    command: >
+      jupyter-lab
+      --ip=0.0.0.0
+      --port=8888
+      --no-browser
+      --allow-root
+      --notebook-dir=/app
+    networks:
+      - lab-net
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8888/api || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    labels:
+      - "alloy_logs=true"
+
+  # ---- Storage ----
+
+  minio:
+    profiles:
+      - model-registry
+      - feature-store
+    <<: *resources-medium
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    container_name: minio
+    ports:
+      - "9002:9000"
+      - "9003:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_BROWSER_REDIRECT_URL: http://localhost:9003
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lab-net
+    labels:
+      - "alloy_logs=true"
+
+  minio-init:
+    profiles:
+      - model-registry
+      - feature-store
+    <<: *resources-micro
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    container_name: minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        mc alias set lab http://minio:9000 minioadmin minioadmin
+        mc mb --ignore-existing lab/data-lake
+        mc mb --ignore-existing lab/mlflow-artifacts
+    networks:
+      - lab-net
+    restart: "no"
+
+  postgres-db:
+    profiles:
+      - model-registry
+      - airflow
+    <<: *resources-large # shared metadata DB for MLflow, Airflow, Marquez, and SonarQube
+    image: postgres:18-alpine3.22
+    container_name: postgres-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+      # docker exec postgres-db psql -U postgres -c "SHOW data_directory;"
+      PGDATA: /var/lib/postgresql/18/docker
+    ports:
+      - "5432:5432"
+    volumes:
+      # docker exec postgres-db psql -U postgres -c "SHOW data_directory;"
+      - postgres_pgdata:/var/lib/postgresql/18/docker
+      - ./services/postgres/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+    networks:
+      - lab-net
+    command: >
+      postgres
+      -c shared_buffers=64MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=32MB
+      -c effective_cache_size=256MB
+      -c max_connections=80
+      -c idle_in_transaction_session_timeout=30000
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    labels:
+      - "alloy_logs=true"
+
+  mlflow:
+    profiles:
+      - model-registry
+    <<: *resources-large # tracking server is mostly I/O bound
+    build:
+      context: .
+      dockerfile: services/mlflow/Dockerfile
+    container_name: mlflow
+    depends_on:
+      postgres-db:
+        condition: service_healthy # waits for pg_isready, not just container start
+      minio-init:
+        condition: service_completed_successfully
+    ports:
+      - "5000:5000"
+    environment:
+      <<: *aws-env
+      MLFLOW_TRACKING_URI: postgresql://mlflow:mlflow@postgres-db:5432/mlflow
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --workers 1
+      --backend-store-uri postgresql://mlflow:mlflow@postgres-db:5432/mlflow
+      --artifacts-destination s3://mlflow-artifacts
+      --allowed-hosts "*"
+    networks:
+      - lab-net
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    labels:
+      - "alloy_logs=true"
+
+  # ---- Management ----
+
+  portainer:
+    profiles:
+      - management-extras
+    <<: *resources-small # completely idle unless you're actively using the UI
+    image: portainer/portainer-ce:2.39.0-alpine
+    container_name: portainer
+    # 1. docker run --rm httpd:2.4-alpine htpasswd -nbB admin 'superpassword' | cut -d ":" -f 2
+    # 2. You need to escape each $ character inside the hashed password with another $
+    command: --admin-password '$$2y$$05$$v1jZdrzA6cdaii29.kpMsu1tFC9OHDDF8rj9LeSNRPGeHUcT.WOS.' # superpassword
+    # Port removed — access via http://portainer.localhost through Caddy/Authelia SSO
+    expose:
+      - "9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
+      - lab-net
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://localhost:9000/api/system/status || exit 1",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    labels:
+      - "alloy_logs=true"
+
+  portainer-init:
+    profiles:
+      - management-extras
+    <<: *resources-micro
+    image: curlimages/curl:8.14.1
+    container_name: portainer-init
+    depends_on:
+      portainer:
+        condition: service_healthy
+      authelia:
+        condition: service_healthy
+    volumes:
+      - ./scripts/setup_portainer_oauth.sh:/setup.sh:ro
+    entrypoint: ["sh", "/setup.sh"]
+    environment:
+      PORTAINER_EXTERNAL_URL: "https://127.0.0.1:9000"
+      AUTHELIA_EXTERNAL_URL: "https://127.0.0.1:9091"
+    networks:
+      - lab-net
+    restart: "no"
+
+  homepage:
+    profiles:
+      - management
+    <<: *resources-small # static config renderer, ~30MB baseline
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage
+    ports:
+      - "3000:3000"
+    environment:
+      HOMEPAGE_ALLOWED_HOSTS: "home.app.localhost,localhost"
+    volumes:
+      - ./services/homepage:/app/config
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - lab-net
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    labels:
+      - "alloy_logs=true"
+
+  adminer:
+    profiles:
+      - management-extras
+    <<: *resources-small # pure PHP UI, barely uses anything
+    image: adminer:5.4.1
+    container_name: adminer
+    ports:
+      - "8082:8080"
+    networks:
+      - lab-net
+    environment:
+      - ADMINER_DEFAULT_SERVER=postgres-db
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8080 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "alloy_logs=true"
+
+  sonarqube:
+    profiles:
+      - quality
+    <<: *default-logging
+    mem_limit: 2304m
+    memswap_limit: 2304m
+    cpus: 1.25
+    deploy:
+      resources:
+        limits:
+          memory: 2304M
+          cpus: "1.25"
+        reservations:
+          memory: 512M
+          cpus: "0.25"
+    image: sonarqube:community
+    container_name: sonarqube
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    ports:
+      - "9004:9000"
+    environment:
+      SONAR_JDBC_URL: jdbc:postgresql://postgres-db:5432/sonarqube
+      SONAR_JDBC_USERNAME: sonar
+      SONAR_JDBC_PASSWORD: sonar
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
+      SONAR_WEB_JAVAOPTS: "-Xms256m -Xmx512m"
+      SONAR_CE_JAVAOPTS: "-Xms256m -Xmx512m"
+      SONAR_SEARCH_JAVAOPTS: "-Xms512m -Xmx512m"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_logs:/opt/sonarqube/logs
+    networks:
+      - lab-net
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "bash -c '</dev/tcp/127.0.0.1/9000'",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 90s
+    labels:
+      - "alloy_logs=true"
+
+  # ---- Orchestration ----
+
+  airflow-init:
+    profiles:
+      - airflow
+    <<: *resources-medium
+    group_add:
+      - "${DOCKER_GID:-0}"
+    build:
+      context: .
+      dockerfile: services/airflow/Dockerfile
+    container_name: airflow-init
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    environment:
+      <<: [*aws-env, *airflow-env, *container-env]
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: admin
+      _AIRFLOW_WWW_USER_PASSWORD: admin
+      _AIRFLOW_WWW_USER_FIRSTNAME: admin
+      _AIRFLOW_WWW_USER_LASTNAME: admin
+      _AIRFLOW_WWW_USER_ROLE: Admin
+      _AIRFLOW_WWW_USER_EMAIL: admin@local
+    volumes: *airflow-volumes
+    networks:
+      - lab-net
+    command: version
+    labels:
+      - "alloy_logs=true"
+
+  airflow-webserver:
+    profiles:
+      - airflow
+    <<: *resources-xxlarge # Airflow 3.x internal API server + execution API; OOMs at 1GB under load
+    group_add:
+      - "${DOCKER_GID:-0}"
+    build:
+      context: .
+      dockerfile: services/airflow/Dockerfile
+    container_name: airflow-webserver
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    # Port removed — access via http://airflow.localhost through Caddy/Authelia SSO
+    expose:
+      - "8080"
+    environment:
+      <<: [*aws-env, *airflow-env, *container-env]
+      AIRFLOW__API_SERVER__WORKERS: 1
+      AIRFLOW__API_SERVER__WEB_SERVER_MASTER_TIMEOUT: 300
+      # SSO: FAB Auth Manager with Authelia OIDC
+      AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+      # Override for localhost access (ChromeOS/Crostini) — browser-facing OIDC authorize_url
+      AUTHELIA_EXTERNAL_URL: "https://127.0.0.1:9091"
+    volumes:
+      - ./app/airflow/dags:/opt/airflow/dags
+      - ./app:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./services/airflow/webserver_config.py:/opt/airflow/webserver_config.py:ro
+      - airflow_logs:/opt/airflow/logs
+    command: api-server
+    networks:
+      - lab-net
+    env_file:
+      - .env
+    tmpfs:
+      - /tmp:size=512m
+    healthcheck:
+      test:
+        ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    labels:
+      - "alloy_logs=true"
+
+  airflow-scheduler:
+    profiles:
+      - airflow
+    <<: *resources-xxlarge # @task.virtualenv pip installs sagemaker[local] (~500MB peak) + runs pipeline
+    group_add:
+      - "${DOCKER_GID:-0}"
+    build:
+      context: .
+      dockerfile: services/airflow/Dockerfile
+    container_name: airflow-scheduler
+    hostname: airflow-scheduler
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    environment:
+      <<: [*aws-env, *airflow-env, *container-env]
+      AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "True"
+      AIRFLOW__SCHEDULER__PARALLELISM: 1
+      AIRFLOW__SCHEDULER__MAX_THREADS: 1
+      AIRFLOW__SCHEDULER__PARSING_PROCESSES: 1
+      AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: 300
+      AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: 300
+    volumes: *airflow-volumes
+    command: scheduler
+    networks:
+      - lab-net
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --local"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    labels:
+      - "alloy_logs=true"
+
+  marquez:
+    profiles:
+      - lineage
+    <<: *default-logging
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 0.50
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.50"
+        reservations:
+          memory: 128M
+          cpus: "0.10"
+    image: marquezproject/marquez:0.50.0
+    container_name: marquez
+    expose:
+      - "5001"
+      - "5002"
+    environment:
+      MARQUEZ_CONFIG: /opt/marquez/marquez.yml
+    volumes:
+      - ./services/marquez/marquez.yml:/opt/marquez/marquez.yml
+    networks:
+      - lab-net
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--spider",
+          "-q",
+          "http://localhost:5001/api/v1/namespaces",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    labels:
+      - "alloy_logs=true"
+
+  # ---- Observability ----
+
+  pushgateway:
+    profiles:
+      - observability-extras
+    <<: *resources-small
+    image: prom/pushgateway:v1.11.0
+    container_name: pushgateway
+    expose:
+      - "9091"
+    networks:
+      - lab-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9091/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "alloy_logs=true"
+
+  prometheus:
+    profiles:
+      - observability
+    <<: *resources-small
+    image: prom/prometheus:v3.10.0-busybox
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./services/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=1d"
+    networks:
+      - lab-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    labels:
+      - "alloy_logs=true"
+
+  grafana:
+    profiles:
+      - observability
+    <<: *default-logging
+    mem_limit: 256m # needs extra for SQLite page cache — avoids I/O thrashing
+    memswap_limit: 256m
+    cpus: 0.25
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.25"
+        reservations:
+          memory: 64M
+          cpus: "0.05"
+    image: grafana/grafana:12.3.5
+    container_name: grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    # Port removed — access via http://grafana.localhost through Caddy/Authelia SSO
+    expose:
+      - "3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ENABLE_GZIP: "true"
+      # SSO via Authelia auth.proxy — Caddy forwards Remote-User header after Authelia validation
+      GF_AUTH_PROXY_ENABLED: "true"
+      GF_AUTH_PROXY_HEADER_NAME: Remote-User
+      GF_AUTH_PROXY_HEADER_PROPERTY: username
+      GF_AUTH_PROXY_AUTO_SIGN_UP: "true"
+      GF_AUTH_PROXY_HEADERS: "Name:Remote-Name Email:Remote-Email"
+      GF_AUTH_PROXY_ENABLE_LOGIN_TOKEN: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./services/grafana/grafana_datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+      - ./services/grafana/grafana_dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
+      - ./services/grafana/dashboards:/opt/grafana/dashboards
+    networks:
+      - lab-net
+    healthcheck:
+      test:
+        ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "alloy_logs=true"
+
+  loki:
+    profiles:
+      - observability
+    <<: *resources-small
+    image: grafana/loki:3.3.2
+    container_name: loki
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./services/loki/loki.yaml:/etc/loki/loki.yaml
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - lab-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3100/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    labels:
+      - "alloy_logs=true"
+
+  cadvisor:
+    profiles:
+      - observability-extras
+    <<: *resources-small
+    image: gcr.io/cadvisor/cadvisor:v0.55.1
+    container_name: cadvisor
+    privileged: true
+    ports:
+      - "8085:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+      - /dev/kmsg:/dev/kmsg:ro
+    command:
+      - "--housekeeping_interval=60s"
+      - "--docker_only=true"
+      - "--store_container_labels=false"
+    networks:
+      - lab-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    labels:
+      - "alloy_logs=true"
+
+  tempo:
+    profiles:
+      - observability-extras
+    <<: *resources-small
+    image: grafana/tempo:2.7.2
+    container_name: tempo
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./services/tempo/tempo.yaml:/etc/tempo.yaml
+      - tempo_data:/var/tempo
+    ports:
+      - "3200:3200" # tempo HTTP API
+    networks:
+      - lab-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3200/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    labels:
+      - "alloy_logs=true"
+
+  alloy:
+    profiles:
+      - observability-extras
+    <<: *resources-small
+    image: grafana/alloy:v1.11.0
+    container_name: alloy
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./services/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - alloy_data:/var/lib/alloy/data
+    ports:
+      - "12345:12345"
+      - "12347:12347"
+    networks:
+      - lab-net
+    depends_on:
+      loki:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+    labels:
+      - "alloy_logs=true"
+
+  otel-collector:
+    profiles:
+      - observability-extras
+    <<: *resources-micro
+    image: otel/opentelemetry-collector:0.127.0
+    container_name: otel-collector
+    command: ["--config=/etc/otel-config.yaml"]
+    volumes:
+      - ./services/otel/otel-config.yaml:/etc/otel-config.yaml
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "8889:8889"
+    networks:
+      - lab-net
+    labels:
+      - "alloy_logs=true"
+
+  # ---- SSO Infrastructure ----
+
+  authelia:
+    profiles:
+      - sso
+    <<: *resources-small
+    image: authelia/authelia:4.39
+    container_name: authelia
+    environment:
+      X_AUTHELIA_CONFIG_FILTERS: template
+    volumes:
+      - ./services/authelia:/config:ro
+      - authelia_data:/data
+    networks:
+      - lab-net
+    expose:
+      - "9091"
+    healthcheck:
+      test:
+        ["CMD", "wget", "--spider", "-q", "http://localhost:9091/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    labels:
+      - "alloy_logs=true"
+
+  caddy:
+    profiles:
+      - sso
+    <<: *resources-small
+    image: caddy:2.11-alpine
+    container_name: caddy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080" # airflow (localhost access)
+      - "3001:3001" # grafana (localhost access, :3000 taken by homepage)
+      - "9000:9000" # portainer (localhost access)
+      - "9091:9091" # authelia portal (localhost access)
+    volumes:
+      - ./services/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    networks:
+      - lab-net
+    depends_on:
+      authelia:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "alloy_logs=true"
+
+  # ---- LLM ----
+
+  llamacpp:
+    profiles:
+      - llm
+    <<: *resources-large
+    image: ghcr.io/ggml-org/llama.cpp:server
+    container_name: llamacpp
+    ports:
+      - "8000:8080"
+    volumes:
+      - llama_cache:/root/.cache/llama.cpp
+    networks:
+      - lab-net
+    command: >
+      -hf LiquidAI/LFM2.5-350M-GGUF:Q4_K_M
+      -c 4096
+      -t 8
+      --host 0.0.0.0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  postgres_pgdata:
+    name: lab-postgres-data
+  portainer_data:
+    name: lab-portainer-data
+  uv_cache:
+    name: lab-uv-cache-data
+  minio_data:
+    name: lab-minio-data
+  alloy_data:
+    name: lab-alloy-data
+  grafana_data:
+    name: lab-grafana-data
+  tempo_data:
+    name: lab-tempo-data
+  loki_data:
+    name: lab-loki-data
+  prometheus_data:
+    name: lab-prometheus-data
+  airflow_logs:
+    name: lab-airflow-logs
+  llama_cache:
+    name: lab-llamacpp-cache-data
+  authelia_data:
+    name: lab-authelia-data
+  caddy_data:
+    name: lab-caddy-data
+  sonarqube_data:
+    name: lab-sonarqube-data
+  sonarqube_extensions:
+    name: lab-sonarqube-extensions
+  sonarqube_logs:
+    name: lab-sonarqube-logs
+networks:
+  lab-net:
+    name: lab-net
+    driver: bridge

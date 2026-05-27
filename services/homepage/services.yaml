@@ -1,0 +1,122 @@
+- LAB:
+    - Jupyter Lab:
+        href: http://localhost:8888
+        description: Notebooks
+        icon: jupyter.png
+        widget:
+          type: docker
+          container: jupyter
+          server: my-docker
+          stats: true
+
+    - MLflow:
+        href: http://localhost:5000
+        description: Experiment tracking
+        icon: si-mlflow
+        widget:
+          type: docker
+          container: mlflow
+          server: my-docker
+          stats: true
+
+    - Airflow:
+        href: https://127.0.0.1:8080
+        description: Pipeline orchestration
+        icon: apache-airflow.png
+        widget:
+          type: docker
+          container: airflow-webserver
+          server: my-docker
+          stats: true
+
+    - MinIO:
+        href: http://localhost:9003
+        description: S3-compatible artifact storage
+        icon: minio.png
+        widget:
+          type: docker
+          container: minio
+          server: my-docker
+          stats: true
+
+    - SonarQube:
+        href: http://localhost:9004
+        description: Code quality analysis
+        icon: sonarqube.png
+        widget:
+          type: docker
+          container: sonarqube
+          server: my-docker
+          stats: true
+
+- OBSERVABILITY:
+    - Prometheus:
+        href: http://localhost:9090
+        description: Metrics collection
+        icon: si-prometheus
+        widget:
+          type: docker
+          container: prometheus
+          server: my-docker
+          stats: true
+
+    - Grafana:
+        href: https://127.0.0.1:3001
+        description: Dashboards & visualization
+        icon: si-grafana
+        widget:
+          type: docker
+          container: grafana
+          server: my-docker
+          stats: true
+
+    - cAdvisor:
+        href: http://localhost:8085
+        description: Container metrics
+        icon: si-googlecloud
+        widget:
+          type: docker
+          container: cadvisor
+          server: my-docker
+          stats: true
+
+    - Grafana Alloy:
+        href: http://localhost:12345
+        description: Telemetry collector and Faro intake
+        icon: si-grafana
+        widget:
+          type: docker
+          container: alloy
+          server: my-docker
+          stats: true
+
+- MANAGEMENT:
+    - Adminer:
+        href: http://localhost:8082
+        description: Postgres UI
+        icon: adminer.png
+        widget:
+          type: docker
+          container: adminer
+          server: my-docker
+          stats: true
+
+    - Portainer:
+        href: https://127.0.0.1:9000
+        description: Container manager
+        icon: portainer.png
+        widget:
+          type: docker
+          container: portainer
+          server: my-docker
+          stats: true
+
+    - Authelia:
+        href: https://127.0.0.1:9091
+        description: SSO Portal
+        icon: authelia.png
+        widget:
+          type: docker
+          container: authelia
+          server: my-docker
+          stats: true

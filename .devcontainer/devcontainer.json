@@ -1,0 +1,195 @@
+{
+	"name": "Lab",
+	"dockerComposeFile": [
+		"../docker-compose.yml",
+		"docker-compose.devcontainer.yml"
+	],
+	"service": "devcontainer",
+	"workspaceFolder": "/workspace",
+	"features": {
+		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+			"moby": false,
+			"installDockerBuildx": true,
+			"version": "latest",
+			"dockerDashComposeVersion": "v2"
+		},
+		"ghcr.io/devcontainers/features/common-utils:2": {
+			"installZsh": true,
+			"installOhMyZsh": true,
+			"upgradePackages": false
+		},
+		"ghcr.io/devcontainers/features/github-cli:1": {},
+		"ghcr.io/devcontainers/features/aws-cli:1": {},
+		"ghcr.io/devcontainers/features/python:1": {
+			"version": "3.11",
+			"installTools": false
+		},
+		"ghcr.io/devcontainers/features/node:1": {
+			"version": "22"
+		},
+		"ghcr.io/devcontainers/features/terraform:1": {}
+	},
+	"initializeCommand": "touch .env && bash scripts/generate_oidc_key.sh",
+	"postCreateCommand": "curl -LsSf https://astral.sh/uv/install.sh | sh",
+	"containerEnv": {
+		"AWS_ACCESS_KEY_ID": "minioadmin",
+		"AWS_SECRET_ACCESS_KEY": "minioadmin",
+		"AWS_DEFAULT_REGION": "us-east-1",
+		"AWS_ENDPOINT_URL": "http://minio:9000",
+		"MLFLOW_TRACKING_URI": "http://mlflow:5000",
+		"MLFLOW_S3_ENDPOINT_URL": "http://minio:9000",
+		"MINIO_ENDPOINT": "http://minio:9000",
+		"MINIO_ROOT_USER": "minioadmin",
+		"MINIO_ROOT_PASSWORD": "minioadmin",
+		"POSTGRES_HOST": "postgres-db",
+		"POSTGRES_PORT": "5432",
+		"POSTGRES_USER": "postgres",
+		"POSTGRES_PASSWORD": "postgres",
+		"AIRFLOW_BASE_URL": "http://airflow-webserver:8080",
+		"GRAFANA_URL": "http://grafana:3000",
+		"PROMETHEUS_URL": "http://prometheus:9090",
+		"LOKI_URL": "http://loki:3100",
+		"TEMPO_URL": "http://tempo:3200",
+		"ALLOY_URL": "http://alloy:12345",
+		"FARO_COLLECTOR_URL": "http://localhost:12347/collect",
+		"OTEL_EXPORTER_OTLP_ENDPOINT": "http://otel-collector:4317",
+		"JUPYTER_URL": "http://jupyter:8888",
+		"LLAMACPP_URL": "http://llamacpp:8080",
+		"SONAR_HOST_URL": "http://sonarqube:9000"
+	},
+	"remoteEnv": {
+		"PATH": "${containerEnv:PATH}:/root/.local/bin"
+	},
+	"forwardPorts": [
+		3000,
+		3001,
+		3100,
+		3200,
+		4317,
+		4318,
+		5000,
+		5432,
+		8000,
+		8080,
+		8082,
+		8085,
+		8888,
+		9000,
+		9002,
+		9003,
+		9004,
+		9090
+	],
+	"portsAttributes": {
+		"3000": {
+			"label": "Homepage",
+			"onAutoForward": "openBrowser"
+		},
+		"3001": {
+			"label": "Grafana",
+			"onAutoForward": "silent"
+		},
+		"3100": {
+			"label": "Loki",
+			"onAutoForward": "silent"
+		},
+		"3200": {
+			"label": "Tempo",
+			"onAutoForward": "silent"
+		},
+		"5000": {
+			"label": "MLflow",
+			"onAutoForward": "silent"
+		},
+		"5432": {
+			"label": "Postgres",
+			"onAutoForward": "silent"
+		},
+		"8000": {
+			"label": "LlamaCpp",
+			"onAutoForward": "silent"
+		},
+		"8080": {
+			"label": "Airflow",
+			"onAutoForward": "silent"
+		},
+		"8082": {
+			"label": "Adminer",
+			"onAutoForward": "silent"
+		},
+		"8085": {
+			"label": "cAdvisor",
+			"onAutoForward": "silent"
+		},
+		"8888": {
+			"label": "Jupyter",
+			"onAutoForward": "silent"
+		},
+		"9000": {
+			"label": "Portainer",
+			"onAutoForward": "silent"
+		},
+		"9002": {
+			"label": "MinIO API",
+			"onAutoForward": "silent"
+		},
+		"9003": {
+			"label": "MinIO Console",
+			"onAutoForward": "silent"
+		},
+		"9004": {
+			"label": "SonarQube",
+			"onAutoForward": "silent"
+		},
+		"9090": {
+			"label": "Prometheus",
+			"onAutoForward": "silent"
+		}
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-python.python",
+				"ms-python.vscode-pylance",
+				"ms-toolsai.jupyter",
+				"ms-python.autopep8",
+				"ms-python.black-formatter",
+				"ms-python.isort",
+				"ms-python.mypy-type-checker",
+				"ms-python.vscode-pylance",
+				"ms-azuretools.vscode-docker",
+				"ms-python.debugpy",
+				"ms-python.vscode-python-envs",
+				"redhat.vscode-yaml",
+				"esbenp.prettier-vscode",
+				"eamodio.gitlens",
+				"amazonwebservices.aws-toolkit-vscode",
+				"shardulm94.trailing-spaces",
+				"esbenp.prettier-vscode",
+				"streetsidesoftware.code-spell-checker-portuguese-brazilian",
+				"streetsidesoftware.code-spell-checker",
+				"Catppuccin.catppuccin-vsc",
+				"Catppuccin.catppuccin-vsc-icons",
+				"naumovs.color-highlight",
+				"mikestead.dotenv",
+				"tamasfe.even-better-toml",
+				"GitHub.copilot-chat",
+				"hashicorp.terraform"
+			],
+			"settings": {
+				"terminal.integrated.defaultProfile.linux": "zsh",
+				"python.defaultInterpreterPath": "/usr/local/bin/python",
+				"jupyter.jupyterServerType": "remote",
+				"jupyter.serverUri": "http://jupyter:8888",
+				"aws.dev.endpoints": {
+					"s3": "http://minio:9000"
+				}
+			}
+		}
+	},
+	"hostRequirements": {
+		"cpus": 8,
+		"memory": "8gb",
+		"storage": "32gb"
+	}
+}

@@ -1,0 +1,70 @@
+# services/prometheus/prometheus.yaml
+
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+  # Attach these labels to every timeseries collected from targets
+  external_labels:
+    environment: lab
+
+rule_files:
+  - /etc/prometheus/rules/*.yaml
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["prometheus:9090"]
+
+  - job_name: "cadvisor"
+    scrape_interval: 60s
+    static_configs:
+      - targets: ["cadvisor:8080"]
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: "container_(tasks_state|memory_failures_total)"
+        action: drop
+
+  # MLflow tracking server — /metrics not exposed by default, but /health is useful
+  # Enable this when you add a prometheus exporter sidecar or use mlflow's built-in metrics
+  # - job_name: "mlflow"
+  #   static_configs:
+  #     - targets: ["mlflow:5000"]
+  #   metrics_path: /metrics
+
+  # Airflow — metrics exposed at /admin/metrics when StatsD exporter is configured
+  # Uncomment after adding statsd_exporter to your stack
+  # - job_name: "airflow"
+  #   static_configs:
+  #     - targets: ["airflow-webserver:8080"]
+  #   metrics_path: /admin/metrics
+
+  # Node-level metrics (optional: add node-exporter container if needed)
+  # - job_name: "node"
+  #   static_configs:
+  #     - targets: ["node-exporter:9100"]
+
+  # Loki internal metrics
+  - job_name: "loki"
+    static_configs:
+      - targets: ["loki:3100"]
+    metrics_path: /metrics
+
+  # Tempo internal metrics
+  - job_name: "tempo"
+    static_configs:
+      - targets: ["tempo:3200"]
+    metrics_path: /metrics
+
+  - job_name: "otel-collector"
+    static_configs:
+      - targets: ["otel-collector:8889"]
+
+  - job_name: "alloy"
+    static_configs:
+      - targets: ["alloy:12345"]
+
+  - job_name: "pushgateway"
+    honor_labels: true
+    static_configs:
+      - targets: ["pushgateway:9091"]

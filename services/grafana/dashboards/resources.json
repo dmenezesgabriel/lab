@@ -1,0 +1,464 @@
+{
+    "description": "Lab - CPU, memory, network and disk per Docker container (Prometheus / cAdvisor)",
+    "editable": true,
+    "graphTooltip": 1,
+    "links": [
+        {
+            "title": "Overview",
+            "url": "/d/lab-overview",
+            "type": "link",
+            "icon": "external link"
+        },
+        {
+            "title": "Logs",
+            "url": "/d/lab-logs",
+            "type": "link",
+            "icon": "external link"
+        },
+        {
+            "title": "Services",
+            "url": "/d/lab-services",
+            "type": "link",
+            "icon": "external link"
+        }
+    ],
+    "panels": [
+        {
+            "id": 1,
+            "type": "row",
+            "title": "CPU",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 0
+            }
+        },
+        {
+            "id": 2,
+            "type": "timeseries",
+            "title": "CPU usage",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${prom}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 16,
+                "x": 0,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "percentunit",
+                    "min": 0,
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "fillOpacity": 15,
+                        "lineWidth": 1.5,
+                        "showPoints": "never"
+                    }
+                }
+            },
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "mean",
+                        "max"
+                    ],
+                    "displayMode": "table",
+                    "placement": "right"
+                },
+                "tooltip": {
+                    "mode": "multi"
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${prom}"
+                    },
+                    "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name=~\"$container\", image!=\"\"}[3m]))",
+                    "legendFormat": "{{name}}",
+                    "refId": "A"
+                }
+            ]
+        },
+        {
+            "id": 3,
+            "type": "bargauge",
+            "title": "Current CPU",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${prom}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 16,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "percentunit",
+                    "min": 0,
+                    "max": 1,
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "yellow",
+                                "value": 0.4
+                            },
+                            {
+                                "color": "red",
+                                "value": 0.8
+                            }
+                        ]
+                    }
+                }
+            },
+            "options": {
+                "orientation": "horizontal",
+                "displayMode": "lcd",
+                "showUnfilled": true,
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${prom}"
+                    },
+                    "expr": "sort_desc(sum by (name) (rate(container_cpu_usage_seconds_total{name=~\"$container\", image!=\"\"}[3m])))",
+                    "legendFormat": "{{name}}",
+                    "refId": "A",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 10,
+            "type": "row",
+            "title": "Memory",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 9
+            }
+        },
+        {
+            "id": 11,
+            "type": "timeseries",
+            "title": "Memory — working set",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${prom}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 16,
+                "x": 0,
+                "y": 10
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "bytes",
+                    "min": 0,
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "fillOpacity": 15,
+                        "lineWidth": 1.5,
+                        "showPoints": "never"
+                    }
+                }
+            },
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "mean",
+                        "max"
+                    ],
+                    "displayMode": "table",
+                    "placement": "right"
+                },
+                "tooltip": {
+                    "mode": "multi"
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${prom}"
+                    },
+                    "expr": "container_memory_working_set_bytes{name=~\"$container\", image!=\"\"}",
+                    "legendFormat": "{{name}}",
+                    "refId": "A"
+                }
+            ]
+        },
+        {
+            "id": 12,
+            "type": "bargauge",
+            "title": "Current memory",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${prom}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 16,
+                "y": 10
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "bytes",
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "yellow",
+                                "value": 300000000
+                            },
+                            {
+                                "color": "red",
+                                "value": 700000000
+                            }
+                        ]
+                    }
+                }
+            },
+            "options": {
+                "orientation": "horizontal",
+                "displayMode": "lcd",
+                "showUnfilled": true,
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${prom}"
+                    },
+                    "expr": "sort_desc(container_memory_working_set_bytes{name=~\"$container\", image!=\"\"})",
+                    "legendFormat": "{{name}}",
+                    "refId": "A",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 20,
+            "type": "row",
+            "title": "Network & disk",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 18
+            }
+        },
+        {
+            "id": 21,
+            "type": "timeseries",
+            "title": "Network I/O",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${prom}"
+            },
+            "gridPos": {
+                "h": 7,
+                "w": 12,
+                "x": 0,
+                "y": 19
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "Bps",
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "fillOpacity": 10,
+                        "lineWidth": 1.5,
+                        "showPoints": "never"
+                    }
+                }
+            },
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "mean"
+                    ],
+                    "displayMode": "table",
+                    "placement": "right"
+                },
+                "tooltip": {
+                    "mode": "multi"
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${prom}"
+                    },
+                    "expr": "sum by (name) (rate(container_network_receive_bytes_total{name=~\"$container\", image!=\"\"}[3m]))",
+                    "legendFormat": "{{name}} rx",
+                    "refId": "A"
+                },
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${prom}"
+                    },
+                    "expr": "sum by (name) (rate(container_network_transmit_bytes_total{name=~\"$container\", image!=\"\"}[3m]))",
+                    "legendFormat": "{{name}} tx",
+                    "refId": "B"
+                }
+            ]
+        },
+        {
+            "id": 22,
+            "type": "timeseries",
+            "title": "Disk I/O",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${prom}"
+            },
+            "gridPos": {
+                "h": 7,
+                "w": 12,
+                "x": 12,
+                "y": 19
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "Bps",
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "fillOpacity": 10,
+                        "lineWidth": 1.5,
+                        "showPoints": "never"
+                    }
+                }
+            },
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "mean"
+                    ],
+                    "displayMode": "table",
+                    "placement": "right"
+                },
+                "tooltip": {
+                    "mode": "multi"
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${prom}"
+                    },
+                    "expr": "sum by (name) (rate(container_fs_reads_bytes_total{name=~\"$container\", image!=\"\"}[3m]))",
+                    "legendFormat": "{{name}} read",
+                    "refId": "A"
+                },
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${prom}"
+                    },
+                    "expr": "sum by (name) (rate(container_fs_writes_bytes_total{name=~\"$container\", image!=\"\"}[3m]))",
+                    "legendFormat": "{{name}} write",
+                    "refId": "B"
+                }
+            ]
+        }
+    ],
+    "refresh": "2m",
+    "schemaVersion": 38,
+    "tags": [
+        "lab"
+    ],
+    "templating": {
+        "list": [
+            {
+                "name": "prom",
+                "type": "datasource",
+                "query": "prometheus",
+                "refresh": 1,
+                "label": "Prometheus"
+            },
+            {
+                "name": "container",
+                "type": "query",
+                "label": "Container",
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "${prom}"
+                },
+                "definition": "label_values(container_cpu_usage_seconds_total{image!=\"\"}, name)",
+                "query": {
+                    "query": "label_values(container_cpu_usage_seconds_total{image!=\"\"}, name)",
+                    "refId": "A"
+                },
+                "allValue": ".+",
+                "includeAll": true,
+                "multi": true,
+                "refresh": 2,
+                "sort": 1,
+                "hide": 0,
+                "current": {
+                    "selected": true,
+                    "text": "All",
+                    "value": "$__all"
+                }
+            }
+        ]
+    },
+    "time": {
+        "from": "now-1h",
+        "to": "now"
+    },
+    "timezone": "browser",
+    "title": "Lab - Resources",
+    "uid": "lab-resources",
+    "version": 1
+}

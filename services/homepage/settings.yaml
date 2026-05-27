@@ -1,0 +1,19 @@
+title: Lab
+theme: dark
+color: slate
+
+refreshInterval: 10000
+
+layout:
+  LAB:
+    style: column
+    columns: 4
+    header: true
+  OBSERVABILITY:
+    style: column
+    columns: 3
+    header: true
+  MANAGEMENT:
+    style: column
+    columns: 2
+    header: true

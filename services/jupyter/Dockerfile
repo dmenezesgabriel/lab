@@ -1,0 +1,131 @@
+# ============================
+#          BUILDER
+# ============================
+FROM python:3.11-slim AS builder
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        python3-dev \
+        pkg-config \
+        curl \
+        unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install AWS CLI v2
+RUN curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip && \
+    unzip /tmp/awscliv2.zip -d /tmp && \
+    /tmp/aws/install --install-dir /opt/aws-cli --bin-dir /opt/aws-cli/bin && \
+    rm -rf /tmp/awscliv2.zip /tmp/aws
+
+# Install AWS SAM CLI
+RUN curl -fsSL "https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip" -o /tmp/samcli.zip && \
+    unzip /tmp/samcli.zip -d /tmp/sam-installation && \
+    /tmp/sam-installation/install --install-dir /opt/aws-sam-cli --bin-dir /opt/aws-sam-cli/bin && \
+    rm -rf /tmp/samcli.zip /tmp/sam-installation
+
+# Install Terraform
+RUN TERRAFORM_VERSION="1.10.5" && \
+    curl -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip" \
+        -o /tmp/terraform.zip && \
+    unzip /tmp/terraform.zip -d /usr/local/bin && \
+    chmod +x /usr/local/bin/terraform && \
+    rm /tmp/terraform.zip
+
+# Create a stable venv for Jupyter
+RUN python -m venv /opt/venv && \
+    /opt/venv/bin/pip install --no-cache-dir \
+        "jupyterlab==4.4.0" \
+        "terminado>=0.17" \
+        "jupyter-lsp==2.2.5" \
+        "jupyterlab-lsp==5.1.0" \
+        "python-lsp-server[flake8]==1.12.0" \
+        "catppuccin-jupyterlab==0.2.4" \
+        "jupyterlab-code-formatter" \
+        "black" \
+        "isort" \
+        "jupyterlab-spellchecker" \
+        "jupyter-ai==3.0.0" \
+        "duckdb-cli==1.4.4"
+
+# ============================
+#           RUNTIME
+# ============================
+FROM python:3.11-slim AS runtime
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        git \
+        tmux \
+        zsh \
+        vim \
+        curl \
+        graphviz \
+        procps \
+    # ======================================================================= #
+    # Docker CLI
+    # ======================================================================= #
+    && install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+       https://download.docker.com/linux/debian bookworm stable" \
+       > /etc/apt/sources.list.d/docker.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        docker-ce-cli \
+        docker-compose-plugin \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create Docker Compose binary for sagemaker[local] usage
+RUN echo '#!/bin/sh\nexec docker compose "$@"' > /usr/local/bin/docker-compose \
+    && chmod +x /usr/local/bin/docker-compose
+
+# Install Oh my Zsh
+RUN sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+
+# Copy AWS CLI from builder
+COPY --from=builder /opt/aws-cli /opt/aws-cli
+
+# Copy AWS SAM CLI from builder
+COPY --from=builder /opt/aws-sam-cli /opt/aws-sam-cli
+
+# Copy Terraform from builder
+COPY --from=builder /usr/local/bin/terraform /usr/local/bin/terraform
+
+# Update PATH
+ENV PATH="/opt/venv/bin:/opt/aws-cli/bin:/opt/aws-sam-cli/bin:${PATH}"
+
+# uv for ephemeral kernels only
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+
+# Pre-install Python versions for uv kernels
+RUN uv python install 3.11
+
+# Copy stable Jupyter venv from builder
+COPY --from=builder /opt/venv /opt/venv
+
+# Jupyter is run from the venv, NOT uv
+ENV PATH="/opt/venv/bin:${PATH}"
+# Do NOT set PYTHONPATH - kernels manage their own envs via uv
+
+# Jupyter Lab config
+ENV JUPYTER_CONFIG_DIR=/home/.jupyter
+
+COPY ./services/jupyter/jupyter_notebook_config.json /usr/local/etc/jupyter/jupyter_notebook_config.json
+COPY ./services/jupyter/jupyter_notebook_config.py /home/.jupyter/jupyter_server_config.py
+COPY ./services/jupyter/overrides.json /opt/venv/share/jupyter/lab/settings/overrides.json
+
+WORKDIR /app
+
+RUN mkdir -p /scripts
+COPY ./services/jupyter/setup_uv_kernel.py /scripts/setup_uv_kernel.py
+COPY ./services/jupyter/entrypoint.sh /scripts/entrypoint.sh
+
+RUN chmod +x /scripts/entrypoint.sh
+
+EXPOSE 8888
+
+ENTRYPOINT ["/scripts/entrypoint.sh"]
+CMD ["jupyter-lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--notebook-dir=/app"]

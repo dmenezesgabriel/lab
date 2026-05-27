@@ -1,0 +1,207 @@
+{
+  "description": "Lab service health, saturation, restarts, and log signals across the Docker Compose observability stack.",
+  "editable": true,
+  "graphTooltip": 1,
+  "links": [
+    {
+      "title": "Overview",
+      "url": "/d/lab-overview",
+      "type": "link",
+      "icon": "external link"
+    },
+    {
+      "title": "Logs",
+      "url": "/d/lab-logs",
+      "type": "link",
+      "icon": "external link"
+    },
+    {
+      "title": "Resources",
+      "url": "/d/lab-resources",
+      "type": "link",
+      "icon": "external link"
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Golden signals",
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0}
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Prometheus scrape health",
+      "description": "All configured scrape targets should be 1. This is the fastest check for broken observability wiring.",
+      "datasource": {"type": "prometheus", "uid": "${prom}"},
+      "gridPos": {"h": 5, "w": 8, "x": 0, "y": 1},
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"options": {"0": {"text": "DOWN"}, "1": {"text": "UP"}}, "type": "value"}
+          ],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+        }
+      },
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${prom}"}, "expr": "up", "legendFormat": "{{job}} / {{instance}}", "refId": "A"}
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "OOM events — 1h",
+      "description": "Any non-zero value means a container hit its memory limit and needs attention.",
+      "datasource": {"type": "prometheus", "uid": "${prom}"},
+      "gridPos": {"h": 5, "w": 8, "x": 8, "y": 1},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}
+        }
+      },
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${prom}"}, "expr": "sum by (name) (increase(container_oom_events_total{name=~\"$container\"}[1h]))", "legendFormat": "{{name}}", "refId": "A"}
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Restarted containers — 1h",
+      "description": "Container start time changes indicate restarts or recreations.",
+      "datasource": {"type": "prometheus", "uid": "${prom}"},
+      "gridPos": {"h": 5, "w": 8, "x": 16, "y": 1},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}, {"color": "red", "value": 3}]}
+        }
+      },
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${prom}"}, "expr": "sum by (name) (changes(container_start_time_seconds{name=~\"$container\"}[1h]))", "legendFormat": "{{name}}", "refId": "A"}
+      ]
+    },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "Saturation",
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 6}
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "CPU usage by container",
+      "datasource": {"type": "prometheus", "uid": "${prom}"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 7},
+      "fieldConfig": {"defaults": {"unit": "cores", "custom": {"fillOpacity": 8, "lineWidth": 1, "showPoints": "never"}}},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${prom}"}, "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name=~\"$container\", image!=\"\"}[3m]))", "legendFormat": "{{name}}", "refId": "A"}
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Memory usage by container",
+      "datasource": {"type": "prometheus", "uid": "${prom}"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 7},
+      "fieldConfig": {"defaults": {"unit": "bytes", "custom": {"fillOpacity": 8, "lineWidth": 1, "showPoints": "never"}}},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${prom}"}, "expr": "container_memory_working_set_bytes{name=~\"$container\", image!=\"\"}", "legendFormat": "{{name}}", "refId": "A"}
+      ]
+    },
+    {
+      "id": 20,
+      "type": "row",
+      "title": "Logs",
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 15}
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Log volume by service",
+      "description": "Uses stable service labels from Alloy for efficient Loki queries.",
+      "datasource": {"type": "loki", "uid": "${loki}"},
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 16},
+      "fieldConfig": {"defaults": {"unit": "logs/sec", "custom": {"fillOpacity": 8, "lineWidth": 1, "showPoints": "never"}}},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {"datasource": {"type": "loki", "uid": "${loki}"}, "expr": "sum by (service) (rate({environment=\"lab\", source=\"docker\", service=~\"$service\"}[5m]))", "legendFormat": "{{service}}", "refId": "A"}
+      ]
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Error and warning rate by service",
+      "datasource": {"type": "loki", "uid": "${loki}"},
+      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 16},
+      "fieldConfig": {"defaults": {"unit": "logs/sec", "custom": {"fillOpacity": 8, "lineWidth": 1, "showPoints": "never"}}},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {"datasource": {"type": "loki", "uid": "${loki}"}, "expr": "sum by (service) (rate({environment=\"lab\", source=\"docker\", service=~\"$service\"} |~ `(?i)(error|exception|critical|fatal|traceback|warn|warning)` [5m]))", "legendFormat": "{{service}}", "refId": "A"}
+      ]
+    },
+    {
+      "id": 23,
+      "type": "logs",
+      "title": "Recent errors and warnings",
+      "datasource": {"type": "loki", "uid": "${loki}"},
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 23},
+      "options": {"dedupStrategy": "none", "enableLogDetails": true, "showLabels": true, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true},
+      "targets": [
+        {"datasource": {"type": "loki", "uid": "${loki}"}, "expr": "{environment=\"lab\", source=\"docker\", service=~\"$service\"} |~ `(?i)(error|exception|critical|fatal|traceback|warn|warning)`", "refId": "A"}
+      ]
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 38,
+  "tags": ["lab", "services", "observability"],
+  "templating": {
+    "list": [
+      {"name": "prom", "type": "datasource", "query": "prometheus", "refresh": 1, "label": "Prometheus"},
+      {"name": "loki", "type": "datasource", "query": "loki", "refresh": 1, "label": "Loki"},
+      {
+        "name": "container",
+        "type": "query",
+        "label": "Container",
+        "datasource": {"type": "prometheus", "uid": "${prom}"},
+        "definition": "label_values(container_cpu_usage_seconds_total{image!=\"\"}, name)",
+        "query": {"query": "label_values(container_cpu_usage_seconds_total{image!=\"\"}, name)", "refId": "A"},
+        "allValue": ".+",
+        "includeAll": true,
+        "multi": true,
+        "refresh": 2,
+        "sort": 1,
+        "hide": 0,
+        "current": {"selected": true, "text": "All", "value": "$__all"}
+      },
+      {
+        "name": "service",
+        "type": "query",
+        "label": "Service",
+        "datasource": {"type": "loki", "uid": "${loki}"},
+        "query": {"label": "service", "stream": "{environment=\"lab\", source=\"docker\"}", "type": 1},
+        "allValue": ".+",
+        "includeAll": true,
+        "multi": true,
+        "refresh": 2,
+        "sort": 1,
+        "hide": 0,
+        "current": {"selected": true, "text": "All", "value": "$__all"}
+      }
+    ]
+  },
+  "time": {"from": "now-1h", "to": "now"},
+  "timezone": "browser",
+  "title": "Lab - Services",
+  "uid": "lab-services",
+  "version": 1
+}

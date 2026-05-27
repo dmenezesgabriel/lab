@@ -1,0 +1,519 @@
+{
+    "description": "Lab - health at a glance across all services and pipelines",
+    "editable": true,
+    "graphTooltip": 1,
+    "links": [
+        {
+            "title": "Logs",
+            "url": "/d/lab-logs",
+            "type": "link",
+            "icon": "external link",
+            "targetBlank": false
+        },
+        {
+            "title": "Pipelines",
+            "url": "/d/lab-services",
+            "type": "link",
+            "icon": "external link",
+            "targetBlank": false
+        },
+        {
+            "title": "Resources",
+            "url": "/d/lab-resources",
+            "type": "link",
+            "icon": "external link",
+            "targetBlank": false
+        }
+    ],
+    "panels": [
+        {
+            "id": 1,
+            "type": "row",
+            "title": "Health at a glance",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 0
+            }
+        },
+        {
+            "id": 2,
+            "type": "stat",
+            "title": "Error rate — docker services",
+            "description": "Error lines/s from Grafana Alloy Docker logs",
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 0,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "reqps",
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "yellow",
+                                "value": 0.1
+                            },
+                            {
+                                "color": "red",
+                                "value": 1
+                            }
+                        ]
+                    }
+                }
+            },
+            "options": {
+                "colorMode": "background",
+                "graphMode": "area",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "loki",
+                        "uid": "${loki}"
+                    },
+                    "expr": "sum(rate({environment=\"lab\", source=\"docker\", service=~\".+\"} |~ `(?i)(error|exception|critical|fatal)` [5m]))",
+                    "legendFormat": "errors/s",
+                    "refId": "A"
+                }
+            ]
+        },
+        {
+            "id": 3,
+            "type": "stat",
+            "title": "Error rate — pipelines (OTEL)",
+            "description": "Error lines/s from SageMaker pipeline steps via OTEL",
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 6,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "reqps",
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "yellow",
+                                "value": 0.1
+                            },
+                            {
+                                "color": "red",
+                                "value": 1
+                            }
+                        ]
+                    }
+                }
+            },
+            "options": {
+                "colorMode": "background",
+                "graphMode": "area",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "loki",
+                        "uid": "${loki}"
+                    },
+                    "expr": "sum(rate({service_name=~\".+\"} |~ `(?i)(error|exception|critical|fatal)` [5m]))",
+                    "legendFormat": "errors/s",
+                    "refId": "A"
+                }
+            ]
+        },
+        {
+            "id": 4,
+            "type": "stat",
+            "title": "Top CPU container",
+            "description": "Docker container currently using the most CPU",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${prom}"
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 12,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "percentunit",
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "yellow",
+                                "value": 0.5
+                            },
+                            {
+                                "color": "red",
+                                "value": 0.85
+                            }
+                        ]
+                    }
+                }
+            },
+            "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${prom}"
+                    },
+                    "expr": "topk(1, sum by (name) (rate(container_cpu_usage_seconds_total{image!=\"\"}[3m])))",
+                    "legendFormat": "{{name}}",
+                    "refId": "A",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 5,
+            "type": "stat",
+            "title": "Top memory container",
+            "description": "Docker container currently using the most memory",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${prom}"
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 18,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "bytes",
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "yellow",
+                                "value": 400000000
+                            },
+                            {
+                                "color": "red",
+                                "value": 900000000
+                            }
+                        ]
+                    }
+                }
+            },
+            "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${prom}"
+                    },
+                    "expr": "topk(1, container_memory_working_set_bytes{image!=\"\"})",
+                    "legendFormat": "{{name}}",
+                    "refId": "A",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 10,
+            "type": "row",
+            "title": "Error trends",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 5
+            }
+        },
+        {
+            "id": 11,
+            "type": "timeseries",
+            "title": "Error rate — docker services (Alloy)",
+            "description": "Errors per service scraped via Grafana Alloy from the Docker socket",
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "gridPos": {
+                "h": 7,
+                "w": 12,
+                "x": 0,
+                "y": 6
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "fillOpacity": 15,
+                        "lineWidth": 1.5,
+                        "showPoints": "never"
+                    }
+                }
+            },
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "sum"
+                    ],
+                    "displayMode": "table",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "multi"
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "loki",
+                        "uid": "${loki}"
+                    },
+                    "expr": "sum by (service) (rate({environment=\"lab\", source=\"docker\", service=~\".+\"} |~ `(?i)(error|exception|critical|fatal)` [2m]))",
+                    "legendFormat": "{{container}}",
+                    "refId": "A"
+                }
+            ]
+        },
+        {
+            "id": 12,
+            "type": "timeseries",
+            "title": "Error rate — pipelines (OTEL)",
+            "description": "Errors per pipeline step sent via OTEL from SageMaker / ETL jobs",
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "gridPos": {
+                "h": 7,
+                "w": 12,
+                "x": 12,
+                "y": 6
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "fillOpacity": 15,
+                        "lineWidth": 1.5,
+                        "showPoints": "never"
+                    }
+                }
+            },
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "sum"
+                    ],
+                    "displayMode": "table",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "multi"
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "loki",
+                        "uid": "${loki}"
+                    },
+                    "expr": "sum by (service_name) (rate({service_name=~\".+\"} |~ `(?i)(error|exception|critical|fatal)` [2m]))",
+                    "legendFormat": "{{service_name}}",
+                    "refId": "A"
+                }
+            ]
+        },
+        {
+            "id": 20,
+            "type": "row",
+            "title": "Recent errors — docker services",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 13
+            }
+        },
+        {
+            "id": 21,
+            "type": "logs",
+            "title": "All errors — docker services (last hour)",
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "gridPos": {
+                "h": 9,
+                "w": 12,
+                "x": 0,
+                "y": 14
+            },
+            "options": {
+                "dedupStrategy": "none",
+                "enableLogDetails": true,
+                "showLabels": true,
+                "showTime": true,
+                "sortOrder": "Descending",
+                "wrapLogMessage": true
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "loki",
+                        "uid": "${loki}"
+                    },
+                    "expr": "{environment=\"lab\", source=\"docker\", service=~\".+\"} |~ `(?i)(error|exception|critical|fatal|traceback)`",
+                    "refId": "A"
+                }
+            ]
+        },
+        {
+            "id": 22,
+            "type": "logs",
+            "title": "All errors — pipelines / OTEL (last hour)",
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "gridPos": {
+                "h": 9,
+                "w": 12,
+                "x": 12,
+                "y": 14
+            },
+            "options": {
+                "dedupStrategy": "none",
+                "enableLogDetails": true,
+                "showLabels": true,
+                "showTime": true,
+                "sortOrder": "Descending",
+                "wrapLogMessage": true
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "loki",
+                        "uid": "${loki}"
+                    },
+                    "expr": "{service_name=~\".+\"} |~ `(?i)(error|exception|critical|fatal|traceback)`",
+                    "refId": "A"
+                }
+            ]
+        }
+    ],
+    "refresh": "2m",
+    "schemaVersion": 38,
+    "tags": [
+        "lab"
+    ],
+    "templating": {
+        "list": [
+            {
+                "name": "prom",
+                "type": "datasource",
+                "query": "prometheus",
+                "refresh": 1,
+                "label": "Prometheus"
+            },
+            {
+                "name": "loki",
+                "type": "datasource",
+                "query": "loki",
+                "refresh": 1,
+                "label": "Loki"
+            }
+        ]
+    },
+    "time": {
+        "from": "now-1h",
+        "to": "now"
+    },
+    "timezone": "browser",
+    "title": "Lab - Overview",
+    "uid": "lab-overview",
+    "version": 1
+}
