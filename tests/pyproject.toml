@@ -16,3 +16,14 @@ package = false
 
 [tool.uv.pip]
 require-hashes = true
+
+[tool.pytest.ini_options]
+markers = [
+    "storage: tests for the storage profile stack (postgres-db, minio)",
+    "observability: tests for the observability profile stack (prometheus, grafana)",
+    "orchestration: tests for the orchestration profile stack (airflow)",
+    "sso: tests for the SSO profile stack (authelia)",
+    "quality: tests for the quality profile stack (sonarqube)",
+    "security: tests that verify no secrets are exposed in containers",
+    "smoke: tests that verify the test-runner image builds cleanly",
+]
