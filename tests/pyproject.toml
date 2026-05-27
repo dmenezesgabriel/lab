@@ -26,4 +26,9 @@ markers = [
     "quality: tests for the quality profile stack (sonarqube)",
     "security: tests that verify no secrets are exposed in containers",
     "smoke: tests that verify the test-runner image builds cleanly",
+    "e2e: end-to-end browser tests using Playwright",
+    "homepage: e2e tests for the homepage service",
+    "grafana: e2e tests for the Grafana UI",
+    "mlflow: e2e tests for the MLflow UI",
+    "airflow: e2e tests for the Airflow webserver UI",
 ]
