@@ -7,8 +7,20 @@ Usage example:
 import sys
 from pathlib import Path
 
-# Allow test files to import from steps/ as a plain package.
+# Allow pytest_plugins and test files to import from steps/ as a plain package.
 sys.path.insert(0, str(Path(__file__).parent))
+
+# In pytest-bdd 8.x, step decorators register fixtures into the calling
+# module's scope rather than a global registry.  Declaring step modules here
+# as plugins makes pytest discover those fixtures so they are visible to all
+# tests under this directory.
+pytest_plugins = [
+    "steps.storage_steps",
+    "steps.observability_steps",
+    "steps.orchestration_steps",
+    "steps.quality_steps",
+    "steps.sso_steps",
+]
 
 import docker
 import httpx

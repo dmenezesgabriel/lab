@@ -2,11 +2,6 @@
 import pytest
 from pytest_bdd import scenarios
 
-from steps.sso_steps import (  # noqa: F401 — registers steps with pytest-bdd
-    sso_stack_running,
-    get_authelia_health,
-)
-
 pytestmark = pytest.mark.sso
 
 

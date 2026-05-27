@@ -2,13 +2,6 @@
 import pytest
 from pytest_bdd import scenarios
 
-from steps.storage_steps import (  # noqa: F401 — registers steps with pytest-bdd
-    storage_stack_running,
-    check_postgres_container,
-    postgres_tcp_reachable,
-    get_minio_health,
-)
-
 pytestmark = pytest.mark.storage
 
 
